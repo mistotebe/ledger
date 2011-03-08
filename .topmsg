@@ -1,0 +1,6 @@
+From: John Wiegley <johnw@newartisans.com>
+Subject: [PATCH] t/time_colon
+
+Support for HOUR:MINUTE output when time commodities are used.
+
+Signed-off-by: John Wiegley <johnw@newartisans.com>
