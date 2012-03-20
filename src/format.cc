@@ -399,6 +399,11 @@ string format_t::real_calc(scope_t& scope)
 {
   std::ostringstream out_str;
 
+  symbol_scope_t symbols(scope);
+
+  expr_t::ptr_op_t curr_offset(expr_t::op_t::wrap_value(0L));
+  symbols.define(symbol_t::FUNCTION, "curr_offset", curr_offset);
+
   for (element_t * elem = elements.get(); elem; elem = elem->next.get()) {
     std::ostringstream out;
     string name;
@@ -418,15 +423,15 @@ string format_t::real_calc(scope_t& scope)
     case element_t::EXPR: {
       expr_t& expr(boost::get<expr_t>(elem->data));
       try {
-        expr.compile(scope);
+        expr.compile(symbols);
 
         value_t value;
         if (expr.is_function()) {
-          call_scope_t args(scope);
+          call_scope_t args(symbols);
           args.push_back(long(elem->max_width));
           value = expr.get_function()(args);
         } else {
-          value = expr.calc(scope);
+          value = expr.calc(symbols);
         }
         DEBUG("format.expr", "value = (" << value << ")");
 
@@ -462,8 +467,10 @@ string format_t::real_calc(scope_t& scope)
           for (std::size_t i = 0; i < elem->min_width - temp.length(); i++)
             result += " ";
       }
+      curr_offset->set_value(curr_offset->as_value() + result.length());
       out_str << result;
     } else {
+      curr_offset->set_value(curr_offset->as_value() + out.str().length());
       out_str << out.str();
     }
   }
