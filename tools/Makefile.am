@@ -14,6 +14,15 @@ lib_LTLIBRARIES =				\
 lib_cppflags  = -I$(srcdir)/src -I$(srcdir)/lib	\
 		-I$(srcdir)/lib/utfcpp/source
 
+if HAVE_BOOST_ASIO
+
+lib_LTLIBRARIES +=				\
+	libledger_http.la
+
+lib_cppflags += -I$(srcdir)/lib/http_server
+
+endif
+
 libledger_util_la_SOURCES =			\
 	src/stream.cc				\
 	src/mask.cc				\
@@ -84,6 +93,22 @@ libledger_report_la_SOURCES  =			\
 
 libledger_report_la_CPPFLAGS = $(lib_cppflags)
 libledger_report_la_LDFLAGS  = -release $(LIBVERSION)
+
+if HAVE_BOOST_ASIO
+
+libledger_http_la_SOURCES  =			\
+	lib/http_server/connection.cpp		\
+	lib/http_server/connection_manager.cpp	\
+	lib/http_server/mime_types.cpp		\
+	lib/http_server/reply.cpp		\
+	lib/http_server/request_handler.cpp	\
+	lib/http_server/request_parser.cpp	\
+	lib/http_server/server.cpp
+
+libledger_http_la_CPPFLAGS = $(lib_cppflags)
+libledger_http_la_LDFLAGS  = -release $(LIBVERSION)
+
+endif
 
 pkginclude_HEADERS =				\
 	src/utils.h				\
@@ -158,6 +183,19 @@ pkginclude_HEADERS =				\
 	lib/utfcpp/source/utf8/core.h		\
 	lib/utfcpp/source/utf8/unchecked.h
 
+if HAVE_BOOST_ASIO
+pkginclude_HEADERS +=				\
+	lib/http_server/connection.hpp		\
+	lib/http_server/connection_manager.hpp	\
+	lib/http_server/header.hpp		\
+	lib/http_server/mime_types.hpp		\
+	lib/http_server/reply.hpp		\
+	lib/http_server/request.hpp		\
+	lib/http_server/request_handler.hpp	\
+	lib/http_server/request_parser.hpp	\
+	lib/http_server/server.hpp
+endif
+
 nodist_libledger_util_la_SOURCES = system.hh
 
 BUILT_SOURCES = system.hh
@@ -203,6 +241,9 @@ all_sources	= $(libledger_util_la_SOURCES)		\
 		  $(libledger_report_la_SOURCES)	\
 		  $(libledger_python_la_SOURCES)	\
 		  src/pyledger.cc
+if HAVE_BOOST_ASIO
+all_sources    += $(libledger_http_la_SOURCES)
+endif
 
 all_files	= $(all_sources) $(pkginclude_HEADERS)
 

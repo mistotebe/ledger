@@ -512,6 +512,9 @@ class PrepareBuild(CommandLineApp):
         op.add_option('', '--cache', action='store_true',
                       dest='enable_cache', default=False,
                       help='Enable use of Boost.Serialization (--cache)')
+        op.add_option('', '--http', action='store_true',
+                      dest='enable_http', default=False,
+                      help='Enable builing of the embedded HTTP server')
         op.add_option('', '--doxygen', action='store_true',
                       dest='enable_doxygen', default=False,
                       help='Enable use of Doxygen to build ref manual ("make docs")')
@@ -1078,6 +1081,8 @@ class PrepareBuild(CommandLineApp):
             self.configure_args.append('--enable-doxygen')
         if self.options.enable_cache:
             self.configure_args.append('--enable-cache')
+        if self.options.enable_http:
+            self.configure_args.append('--enable-http')
         if self.options.python:
             self.configure_args.append('--enable-python')
         if self.options.no_python:

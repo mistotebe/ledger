@@ -75,6 +75,16 @@ AC_ARG_ENABLE(cache,
 
 AM_CONDITIONAL(USE_CACHE_OPTION, test x$cache = xtrue)
 
+AC_ARG_ENABLE(http,
+  [  --enable-http           Enable use of the --http option],
+  [case "${enableval}" in
+    yes) http=true ;;
+    no)  http=false ;;
+    *) AC_MSG_ERROR(bad value ${enableval} for --enable-http) ;;
+  esac],[http=false])
+
+AM_CONDITIONAL(USE_HTTP_OPTION, test x$http = xtrue)
+
 AC_ARG_ENABLE(python,
   [  --enable-python         Turn on Python support (experimental)],
   [case "${enableval}" in
@@ -332,143 +342,172 @@ else
 fi
 
 # check for boost_serialization
-AC_CACHE_CHECK(
-  [if boost_serialization is available],
-  [boost_serialization_cpplib_avail_cv_],
-  [boost_serialization_save_libs=$LIBS
-   LIBS="-lboost_serialization$BOOST_SUFFIX -lboost_system$BOOST_SUFFIX $LIBS"
-   AC_LANG_PUSH(C++)
-   AC_LINK_IFELSE(
-     [AC_LANG_PROGRAM(
-        [[#include <boost/archive/binary_oarchive.hpp>
-          #include <iostream>
-          struct foo {
-            int a;
-            template<class Archive>
-            void serialize(Archive & ar, const unsigned int) {
-              ar & a;
-            }
-          };]],
-        [[boost::archive::binary_oarchive oa(std::cout);
-          foo x;
-          oa << x;]])],
-     [boost_serialization_cpplib_avail_cv_=true],
-     [boost_serialization_cpplib_avail_cv_=false])
-   AC_LANG_POP
-   LIBS=$boost_serialization_save_libs])
+if [test x$cache = xtrue ]; then
+  AC_CACHE_CHECK(
+    [if boost_serialization is available],
+    [boost_serialization_cpplib_avail_cv_],
+    [boost_serialization_save_libs=$LIBS
+     LIBS="-lboost_serialization$BOOST_SUFFIX -lboost_system$BOOST_SUFFIX $LIBS"
+     AC_LANG_PUSH(C++)
+     AC_LINK_IFELSE(
+       [AC_LANG_PROGRAM(
+          [[#include <boost/archive/binary_oarchive.hpp>
+            #include <iostream>
+            struct foo {
+              int a;
+              template<class Archive>
+              void serialize(Archive & ar, const unsigned int) {
+                ar & a;
+              }
+            };]],
+          [[boost::archive::binary_oarchive oa(std::cout);
+            foo x;
+            oa << x;]])],
+       [boost_serialization_cpplib_avail_cv_=true],
+       [boost_serialization_cpplib_avail_cv_=false])
+     AC_LANG_POP
+     LIBS=$boost_serialization_save_libs])
 
-if [test x$boost_serialization_cpplib_avail_cv_ = xtrue -a x$cache = xtrue]; then
-  AC_DEFINE([HAVE_BOOST_SERIALIZATION], [1], [Whether Boost.Serialization is available])
-  LIBS="-lboost_serialization$BOOST_SUFFIX $LIBS"
+  if [test x$boost_serialization_cpplib_avail_cv_ = xtrue -a x$cache = xtrue]; then
+    AC_DEFINE([HAVE_BOOST_SERIALIZATION], [1], [Whether Boost.Serialization is available])
+    LIBS="-lboost_serialization$BOOST_SUFFIX $LIBS"
+  fi
 fi
+
 AM_CONDITIONAL(HAVE_BOOST_SERIALIZATION, test x$boost_serialization_cpplib_avail_cv_ = xtrue -a x$cache = xtrue)
 
-# check for expat or xmlparse
-AC_ARG_ENABLE(xml,
-  [  --enable-xml            Turn on support for XML parsing],
-  [case "${enableval}" in
-    yes) xml=true ;;
-    no)  xml=false ;;
-    *) AC_MSG_ERROR(bad value ${enableval} for --enable-xml) ;;
-  esac],[xml=true])
-AM_CONDITIONAL(USE_XML, test x$xml = xtrue)
-
-if [test x$xml = xtrue ]; then
-  AC_CACHE_CHECK(
-    [if libexpat is available],
-    [libexpat_avail_cv_],
-    [libexpat_save_libs=$LIBS
-     LIBS="-lexpat $LIBS"
-     AC_LANG_PUSH(C++)
-     AC_TRY_LINK(
-       [#include <stdio.h>
-	extern "C" {
-	#include <expat.h>           // expat XML parser
-	}],
-       [XML_Parser parser = XML_ParserCreate(NULL);
-	return parser != NULL;],
-       [libexpat_avail_cv_=true],
-       [libexpat_avail_cv_=false])
-     AC_LANG_POP
-     LIBS=$libexpat_save_libs])
-
-  if [test x$libexpat_avail_cv_ = xtrue ]; then
-    AM_CONDITIONAL(HAVE_EXPAT, true)
-    LIBS="-lexpat $LIBS"
-  else
-    AM_CONDITIONAL(HAVE_EXPAT, false)
-  fi
-else
-  AM_CONDITIONAL(HAVE_EXPAT, false)
-fi
-
-if [test x$xml = xtrue ]; then
-  if [test x$libexpat_avail_cv_ = xfalse ]; then
-    AC_CACHE_CHECK(
-      [if libxmlparse is available],
-      [libxmlparse_avail_cv_],
-      [libxmlparse_save_libs=$LIBS
-       LIBS="-lxmlparse -lxmltok $LIBS"
-       AC_LANG_PUSH(C++)
-       AC_TRY_LINK(
-	 [#include <stdio.h>
-	extern "C" {
-	#include <xmlparse.h>           // expat XML parser
-	}],
-	 [XML_Parser parser = XML_ParserCreate(NULL);
-	return parser != NULL;],
-	 [libxmlparse_avail_cv_=true],
-	 [libxmlparse_avail_cv_=false])
-       AC_LANG_POP
-       LIBS=$libxmlparse_save_libs])
-
-    if [test x$libxmlparse_avail_cv_ = xtrue ]; then
-      AM_CONDITIONAL(HAVE_XMLPARSE, true)
-      LIBS="-lxmlparse -lxmltok $LIBS"
-    else
-      AM_CONDITIONAL(HAVE_XMLPARSE, false)
-    fi
-  else
-    AM_CONDITIONAL(HAVE_XMLPARSE, false)
-  fi
-else
-  AM_CONDITIONAL(HAVE_XMLPARSE, false)
-fi
+## check for expat or xmlparse
+#AC_ARG_ENABLE(xml,
+#  [  --enable-xml            Turn on support for XML parsing],
+#  [case "${enableval}" in
+#    yes) xml=true ;;
+#    no)  xml=false ;;
+#    *) AC_MSG_ERROR(bad value ${enableval} for --enable-xml) ;;
+#  esac],[xml=true])
+#AM_CONDITIONAL(USE_XML, test x$xml = xtrue)
+#
+#if [test x$xml = xtrue ]; then
+#  AC_CACHE_CHECK(
+#    [if libexpat is available],
+#    [libexpat_avail_cv_],
+#    [libexpat_save_libs=$LIBS
+#     LIBS="-lexpat $LIBS"
+#     AC_LANG_PUSH(C++)
+#     AC_TRY_LINK(
+#       [#include <stdio.h>
+#	extern "C" {
+#	#include <expat.h>           // expat XML parser
+#	}],
+#       [XML_Parser parser = XML_ParserCreate(NULL);
+#	return parser != NULL;],
+#       [libexpat_avail_cv_=true],
+#       [libexpat_avail_cv_=false])
+#     AC_LANG_POP
+#     LIBS=$libexpat_save_libs])
+#
+#  if [test x$libexpat_avail_cv_ = xtrue ]; then
+#    AM_CONDITIONAL(HAVE_EXPAT, true)
+#    LIBS="-lexpat $LIBS"
+#  else
+#    AM_CONDITIONAL(HAVE_EXPAT, false)
+#  fi
+#else
+#  AM_CONDITIONAL(HAVE_EXPAT, false)
+#fi
+#
+#if [test x$xml = xtrue ]; then
+#  if [test x$libexpat_avail_cv_ = xfalse ]; then
+#    AC_CACHE_CHECK(
+#      [if libxmlparse is available],
+#      [libxmlparse_avail_cv_],
+#      [libxmlparse_save_libs=$LIBS
+#       LIBS="-lxmlparse -lxmltok $LIBS"
+#       AC_LANG_PUSH(C++)
+#       AC_TRY_LINK(
+#	 [#include <stdio.h>
+#	extern "C" {
+#	#include <xmlparse.h>           // expat XML parser
+#	}],
+#	 [XML_Parser parser = XML_ParserCreate(NULL);
+#	return parser != NULL;],
+#	 [libxmlparse_avail_cv_=true],
+#	 [libxmlparse_avail_cv_=false])
+#       AC_LANG_POP
+#       LIBS=$libxmlparse_save_libs])
+#
+#    if [test x$libxmlparse_avail_cv_ = xtrue ]; then
+#      AM_CONDITIONAL(HAVE_XMLPARSE, true)
+#      LIBS="-lxmlparse -lxmltok $LIBS"
+#    else
+#      AM_CONDITIONAL(HAVE_XMLPARSE, false)
+#    fi
+#  else
+#    AM_CONDITIONAL(HAVE_XMLPARSE, false)
+#  fi
+#else
+#  AM_CONDITIONAL(HAVE_XMLPARSE, false)
+#fi
 
 # check for libofx
-AC_ARG_ENABLE(ofx,
-  [  --enable-ofx            Turn on support for OFX/OCF parsing],
-  [case "${enableval}" in
-    yes) ofx=true ;;
-    no)  ofx=false ;;
-    *) AC_MSG_ERROR(bad value ${enableval} for --enable-ofx) ;;
-  esac],[ofx=true])
-AM_CONDITIONAL(USE_OFX, test x$ofx = xtrue)
+#AC_ARG_ENABLE(ofx,
+#  [  --enable-ofx            Turn on support for OFX/OCF parsing],
+#  [case "${enableval}" in
+#    yes) ofx=true ;;
+#    no)  ofx=false ;;
+#    *) AC_MSG_ERROR(bad value ${enableval} for --enable-ofx) ;;
+#  esac],[ofx=true])
+#AM_CONDITIONAL(USE_OFX, test x$ofx = xtrue)
+#
+#if [test x$ofx = xtrue ]; then
+#  AC_CACHE_CHECK(
+#    [if libofx is available],
+#    [libofx_avail_cv_],
+#    [libofx_save_libs=$LIBS
+#     LIBS="-lofx $LIBS"
+#     AC_LANG_PUSH(C++)
+#     AC_TRY_LINK(
+#       [#include <libofx.h>],
+#       [  LibofxContextPtr libofx_context = libofx_get_new_context();],
+#       [libofx_avail_cv_=true],
+#       [libofx_avail_cv_=false])
+#     AC_LANG_POP
+#     LIBS=$libofx_save_libs])
+#
+#  if [test x$libofx_avail_cv_ = xtrue ]; then
+#    AM_CONDITIONAL(HAVE_LIBOFX, true)
+#    LIBS="-lofx $LIBS"
+#  else
+#    AM_CONDITIONAL(HAVE_LIBOFX, false)
+#  fi
+#else
+#  AM_CONDITIONAL(HAVE_LIBOFX, false)
+#fi
 
-if [test x$ofx = xtrue ]; then
+# check for Boost.Asio
+if [ test x$http = xtrue ]; then
   AC_CACHE_CHECK(
-    [if libofx is available],
-    [libofx_avail_cv_],
-    [libofx_save_libs=$LIBS
-     LIBS="-lofx $LIBS"
+    [if boost_asio is available],
+    [boost_asio_cpplib_avail_cv_],
+    [boost_asio_save_libs=$LIBS
+     LIBS="-lboost_system$BOOST_SUFFIX $LIBS"
      AC_LANG_PUSH(C++)
-     AC_TRY_LINK(
-       [#include <libofx.h>],
-       [  LibofxContextPtr libofx_context = libofx_get_new_context();],
-       [libofx_avail_cv_=true],
-       [libofx_avail_cv_=false])
+     AC_LINK_IFELSE(
+       [AC_LANG_PROGRAM(
+          [[#include <boost/asio.hpp>
+            #include <string>
+            #include <boost/noncopyable.hpp>]],
+          [[return 0]])],
+       [boost_asio_cpplib_avail_cv_=true],
+       [boost_asio_cpplib_avail_cv_=false])
      AC_LANG_POP
-     LIBS=$libofx_save_libs])
+     LIBS=$boost_asio_save_libs])
 
-  if [test x$libofx_avail_cv_ = xtrue ]; then
-    AM_CONDITIONAL(HAVE_LIBOFX, true)
-    LIBS="-lofx $LIBS"
-  else
-    AM_CONDITIONAL(HAVE_LIBOFX, false)
+  if [ test x$boost_asio_cpplib_avail_cv_ = xtrue ]; then
+    AC_DEFINE([HAVE_BOOST_ASIO], [1], [Whether Boost.Asio is available])
+    LIBS="-lboost_system$BOOST_SUFFIX $LIBS"
   fi
-else
-  AM_CONDITIONAL(HAVE_LIBOFX, false)
 fi
+AM_CONDITIONAL(HAVE_BOOST_ASIO, test x$boost_asio_cpplib_avail_cv_ = xtrue -a x$http = xtrue)
 
 # check for Python
 if [ test x$python = xtrue ]; then
