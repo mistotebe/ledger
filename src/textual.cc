@@ -32,6 +32,7 @@
 #include <system.hh>
 
 #include "journal.h"
+#include "reader.h"
 #include "context.h"
 #include "xact.h"
 #include "post.h"
@@ -72,6 +73,7 @@ namespace {
   class instance_t : public noncopyable, public scope_t
   {
   public:
+    journal_t&               journal;
     parse_context_stack_t&   context_stack;
     parse_context_t&         context;
     std::istream&            in;
@@ -84,11 +86,12 @@ namespace {
 
     instance_t(parse_context_stack_t& _context_stack,
                parse_context_t&       _context,
+               journal_t&             _journal,
                instance_t *           _parent = NULL,
                const bool             _no_assertions = false)
-      : context_stack(_context_stack), context(_context),
+      : journal(_journal), context_stack(_context_stack), context(_context),
         in(*context.stream.get()), parent(_parent),
-        no_assertions(_no_assertions), timelog(context) {}
+        no_assertions(_no_assertions), timelog(context, journal) {}
 
     virtual string description() {
       return _("textual parser");
@@ -117,7 +120,7 @@ namespace {
       if (optional<account_t *> acct = get_application<account_t *>())
         return *acct;
       else
-        return NULL;
+        return journal.master;
     }
 
     void parse();
@@ -498,8 +501,8 @@ void instance_t::default_commodity_directive(char * line)
 
 void instance_t::default_account_directive(char * line)
 {
-  context.journal->bucket = top_account()->find_account(skip_ws(line));
-  context.journal->bucket->add_flags(ACCOUNT_KNOWN);
+  journal.reader->bucket = top_account()->find_account(skip_ws(line));
+  journal.reader->bucket->add_flags(ACCOUNT_KNOWN);
 }
 
 void instance_t::price_conversion_directive(char * line)
@@ -538,8 +541,7 @@ void instance_t::option_directive(char * line)
       *p++ = '\0';
   }
 
-  if (! process_option(context.pathname.string(), line + 2, *context.scope,
-                       p, line))
+  if (! process_option(context.pathname.string(), line + 2, journal, p, line))
     throw_(option_error, _f("Illegal option --%1%") % (line + 2));
 }
 
@@ -581,7 +583,7 @@ void instance_t::automated_xact_directive(char * line)
           item = ae.get();
 
         // This is a trailing note, and possibly a metadata info tag
-        ae->append_note(p + 1, *context.scope, true);
+        ae->append_note(p + 1, journal, true);
         item->add_flags(ITEM_NOTE_ON_NEXT_LINE);
         item->pos->end_pos = context.curr_pos;
         item->pos->end_line++;
@@ -618,9 +620,9 @@ void instance_t::automated_xact_directive(char * line)
       }
     }
 
-    context.journal->auto_xacts.push_back(ae.get());
+    journal.auto_xacts.push_back(ae.get());
 
-    ae->journal       = context.journal;
+    ae->journal       = &journal;
     ae->pos->end_pos  = context.curr_pos;
     ae->pos->end_line = context.linenum;
 
@@ -655,11 +657,11 @@ void instance_t::period_xact_directive(char * line)
 
   if (parse_posts(top_account(), *pe.get())) {
     reveal_context = true;
-    pe->journal = context.journal;
+    pe->journal = &journal;
 
     if (pe->finalize()) {
-      context.journal->extend_xact(pe.get());
-      context.journal->period_xacts.push_back(pe.get());
+      journal.reader->extend_xact(pe.get());
+      journal.period_xacts.push_back(pe.get());
 
       pe->pos->end_pos  = context.curr_pos;
       pe->pos->end_line = context.linenum;
@@ -690,7 +692,7 @@ void instance_t::xact_directive(char * line, std::streamsize len)
   if (xact_t * xact = parse_xact(line, len, top_account())) {
     unique_ptr<xact_t> manager(xact);
 
-    if (context.journal->add_xact(xact)) {
+    if (journal.reader->add_xact(xact)) {
       manager.release();        // it's owned by the journal now
       context.count++;
     }
@@ -765,26 +767,16 @@ void instance_t::include_directive(char * line)
         string base = (*iter).leaf();
 #endif // BOOST_VERSION >= 103700
         if (glob.match(base)) {
-          journal_t *  journal  = context.journal;
-          account_t *  master   = top_account();
-          scope_t *    scope    = context.scope;
           std::size_t& errors   = context.errors;
           std::size_t& count    = context.count;
           std::size_t& sequence = context.sequence;
 
           DEBUG("textual.include", "Including: " << *iter);
-          DEBUG("textual.include", "Master account: " << master->fullname());
 
           context_stack.push(*iter);
-
-          context_stack.get_current().journal = journal;
-          context_stack.get_current().master  = master;
-          context_stack.get_current().scope   = scope;
           try {
-            instance_t instance(context_stack, context_stack.get_current(),
-                                this, no_assertions);
-            instance.apply_stack.push_front(application_t("account", master));
-            instance.parse();
+            instance_t(context_stack, context_stack.get_current(),
+                       journal, this, no_assertions).parse();
           }
           catch (...) {
             errors   += context_stack.get_current().errors;
@@ -906,7 +898,7 @@ void instance_t::account_directive(char * line)
 
   char * p = skip_ws(line);
   account_t * account =
-    context.journal->register_account(p, NULL, top_account());
+    journal.reader->register_account(p, NULL, top_account());
   unique_ptr<auto_xact_t> ae;
 
   while (peek_whitespace_line()) {
@@ -954,7 +946,7 @@ void instance_t::account_directive(char * line)
     else if (keyword == "eval" || keyword == "expr") {
       // jww (2012-02-27): Make account into symbol scopes so that this
       // can be used to override definitions within the account.
-      bind_scope_t bound_scope(*context.scope, *account);
+      bind_scope_t bound_scope(journal, *account);
       expr_t(b).calc(bound_scope);
     }
     else if (keyword == "note") {
@@ -963,9 +955,9 @@ void instance_t::account_directive(char * line)
   }
 
   if (ae.get()) {
-    context.journal->auto_xacts.push_back(ae.get());
+    journal.auto_xacts.push_back(ae.get());
 
-    ae->journal       = context.journal;
+    ae->journal       = &journal;
     ae->pos->end_pos  = in.tellg();
     ae->pos->end_line = context.linenum;
 
@@ -985,8 +977,8 @@ void instance_t::account_alias_directive(account_t * account, string alias)
            % alias % account->fullname());
   }
   std::pair<accounts_map::iterator, bool> result =
-    context.journal->account_aliases.insert
-      (accounts_map::value_type(alias, account));
+    journal.reader->account_aliases.insert(
+      accounts_map::value_type(alias, account));
   if (! result.second)
     (*result.first).second = account;
 }
@@ -1007,13 +999,13 @@ void instance_t::alias_directive(char * line)
 void instance_t::account_payee_directive(account_t * account, string payee)
 {
   trim(payee);
-  context.journal->payees_for_unknown_accounts
-    .push_back(account_mapping_t(mask_t(payee), account));
+  journal.reader->payees_for_unknown_accounts.push_back(
+    account_mapping_t(mask_t(payee), account));
 }
 
 void instance_t::account_default_directive(account_t * account)
 {
-  context.journal->bucket = account;
+  journal.reader->bucket = account;
 }
 
 void instance_t::account_value_directive(account_t * account, string expr_str)
@@ -1023,7 +1015,7 @@ void instance_t::account_value_directive(account_t * account, string expr_str)
 
 void instance_t::payee_directive(char * line)
 {
-  string payee = context.journal->register_payee(line, NULL);
+  string payee = journal.reader->register_payee(line, NULL);
 
   while (peek_whitespace_line()) {
     read_line(line);
@@ -1041,8 +1033,8 @@ void instance_t::payee_directive(char * line)
 void instance_t::payee_alias_directive(const string& payee, string alias)
 {
   trim(alias);
-  context.journal->payee_mappings
-    .push_back(payee_mapping_t(mask_t(alias), payee));
+  journal.reader->payee_mappings.push_back(
+    payee_mapping_t(mask_t(alias), payee));
 }
 
 void instance_t::commodity_directive(char * line)
@@ -1053,7 +1045,7 @@ void instance_t::commodity_directive(char * line)
 
   if (commodity_t * commodity =
       commodity_pool_t::current_pool->find_or_create(symbol)) {
-    context.journal->register_commodity(*commodity, 0);
+    journal.reader->register_commodity(*commodity, 0);
 
     while (peek_whitespace_line()) {
       read_line(line);
@@ -1113,7 +1105,7 @@ void instance_t::commodity_default_directive(commodity_t& comm)
 void instance_t::tag_directive(char * line)
 {
   char * p = skip_ws(line);
-  context.journal->register_metadata(p, NULL_VALUE, 0);
+  journal.reader->register_metadata(p, NULL_VALUE, 0);
 
   while (peek_whitespace_line()) {
     read_line(line);
@@ -1124,7 +1116,7 @@ void instance_t::tag_directive(char * line)
     char * b = next_element(q);
     string keyword(q);
     if (keyword == "assert" || keyword == "check") {
-      context.journal->tag_check_exprs.insert
+      journal.reader->tag_check_exprs.insert
         (tag_check_exprs_map::value_type
          (string(p), expr_t::check_expr_pair(expr_t(b),
                                              keyword == "assert" ?
@@ -1137,26 +1129,26 @@ void instance_t::tag_directive(char * line)
 void instance_t::eval_directive(char * line)
 {
   expr_t expr(line);
-  expr.calc(*context.scope);
+  expr.calc(journal);
 }
 
 void instance_t::assert_directive(char * line)
 {
   expr_t expr(line);
-  if (! expr.calc(*context.scope).to_boolean())
+  if (! expr.calc(journal).to_boolean())
     throw_(parse_error, _f("Assertion failed: %1%") % line);
 }
 
 void instance_t::check_directive(char * line)
 {
   expr_t expr(line);
-  if (! expr.calc(*context.scope).to_boolean())
+  if (! expr.calc(journal).to_boolean())
     context.warning(_f("Check failed: %1%") % line);
 }
 
 void instance_t::value_directive(char * line)
 {
-  context.journal->value_expr = expr_t(line);
+  journal.value_expr = expr_t(line);
 }
 
 void instance_t::comment_directive(char * line)
@@ -1214,8 +1206,8 @@ void instance_t::python_directive(char * line)
   if (! python_session->is_initialized)
     python_session->initialize();
 
-  python_session->main_module->define_global
-    ("journal", python::object(python::ptr(context.journal)));
+  python_session->main_module->define_global(
+    "journal", python::object(python::ptr(journal)));
   python_session->eval(script.str(), python_interpreter_t::PY_EVAL_MULTI);
 }
 
@@ -1443,8 +1435,7 @@ post_t * instance_t::parse_post(char *          line,
   DEBUG("textual.parse", "line " << context.linenum << ": "
         << "Parsed account name " << name);
 
-  post->account =
-    context.journal->register_account(name, post.get(), account);
+  post->account = journal.reader->register_account(name, post.get(), account);
 
   // Parse the optional amount
 
@@ -1455,7 +1446,7 @@ post_t * instance_t::parse_post(char *          line,
     if (*next != '(')           // indicates a value expression
       post->amount.parse(stream, PARSE_NO_REDUCE);
     else
-      parse_amount_expr(stream, *context.scope, *post.get(), post->amount,
+      parse_amount_expr(stream, journal, *post.get(), post->amount,
                         PARSE_NO_REDUCE | PARSE_SINGLE | PARSE_NO_ASSIGN,
                         defer_expr, &post->amount_expr);
 
@@ -1463,7 +1454,7 @@ post_t * instance_t::parse_post(char *          line,
           << "post amount = " << post->amount);
 
     if (! post->amount.is_null() && post->amount.has_commodity()) {
-      context.journal->register_commodity(post->amount.commodity(), post.get());
+      journal.reader->register_commodity(post->amount.commodity(), post.get());
 
       if (! post->amount.has_annotation()) {
         std::vector<fixed_rate_t> rates;
@@ -1528,7 +1519,7 @@ post_t * instance_t::parse_post(char *          line,
           if (*p != '(')                // indicates a value expression
             post->cost->parse(cstream, PARSE_NO_MIGRATE);
           else
-            parse_amount_expr(cstream, *context.scope, *post.get(), *post->cost,
+            parse_amount_expr(cstream, journal, *post.get(), *post->cost,
                               PARSE_NO_MIGRATE | PARSE_SINGLE | PARSE_NO_ASSIGN);
 
           if (post->cost->sign() < 0)
@@ -1585,7 +1576,7 @@ post_t * instance_t::parse_post(char *          line,
       if (*p != '(')            // indicates a value expression
         post->assigned_amount->parse(stream, PARSE_NO_MIGRATE);
       else
-        parse_amount_expr(stream, *context.scope, *post.get(),
+        parse_amount_expr(stream, journal, *post.get(),
                           *post->assigned_amount,
                           PARSE_SINGLE | PARSE_NO_MIGRATE);
 
@@ -1659,7 +1650,7 @@ post_t * instance_t::parse_post(char *          line,
   // Parse the optional note
 
   if (next && *next == ';') {
-    post->append_note(++next, *context.scope, true);
+    post->append_note(++next, journal, true);
     next = line + len;
     DEBUG("textual.parse", "line " << context.linenum << ": "
           << "Parsed a posting note");
@@ -1678,7 +1669,7 @@ post_t * instance_t::parse_post(char *          line,
   std::vector<string> tags;
   get_applications<string>(tags);
   foreach (string& tag, tags)
-    post->parse_tags(tag.c_str(), *context.scope, true);
+    post->parse_tags(tag.c_str(), journal, true);
 
   TRACE_STOP(post_details, 1);
 
@@ -1798,7 +1789,7 @@ xact_t * instance_t::parse_xact(char *          line,
       }
       ++p;
     }
-    xact->payee = context.journal->register_payee(next, xact.get());
+    xact->payee = journal.reader->register_payee(next, xact.get());
     next = p;
   } else {
     xact->payee = _("<Unspecified payee>");
@@ -1807,7 +1798,7 @@ xact_t * instance_t::parse_xact(char *          line,
   // Parse the xact note
 
   if (next && *next == ';')
-    xact->append_note(++next, *context.scope, false);
+    xact->append_note(++next, journal, false);
 
   TRACE_STOP(xact_text, 1);
 
@@ -1833,7 +1824,7 @@ xact_t * instance_t::parse_xact(char *          line,
 
     if (*p == ';') {
       // This is a trailing note, and possibly a metadata info tag
-      item->append_note(p + 1, *context.scope, true);
+      item->append_note(p + 1, journal, true);
       item->add_flags(ITEM_NOTE_ON_NEXT_LINE);
       item->pos->end_pos = context.curr_pos;
       item->pos->end_line++;
@@ -1847,7 +1838,7 @@ xact_t * instance_t::parse_xact(char *          line,
       const char c = *p;
       p = skip_ws(&p[*p == 'a' ? 6 : (*p == 'c' ? 5 : 4)]);
       expr_t expr(p);
-      bind_scope_t bound_scope(*context.scope, *item);
+      bind_scope_t bound_scope(journal, *item);
       if (c == 'e') {
         expr.calc(bound_scope);
       }
@@ -1894,7 +1885,7 @@ xact_t * instance_t::parse_xact(char *          line,
   std::vector<string> tags;
   get_applications<string>(tags);
   foreach (string& tag, tags)
-    xact->parse_tags(tag.c_str(), *context.scope, false);
+    xact->parse_tags(tag.c_str(), journal, false);
 
   TRACE_STOP(xact_details, 1);
 
@@ -1915,23 +1906,20 @@ xact_t * instance_t::parse_xact(char *          line,
 expr_t::ptr_op_t instance_t::lookup(const symbol_t::kind_t kind,
                                     const string& name)
 {
-  return context.scope->lookup(kind, name);
+  return journal.lookup(kind, name);
 }
 
-std::size_t journal_t::read_textual(parse_context_stack_t& context_stack)
+std::size_t journal_t::reader_t::read_textual()
 {
   TRACE_START(parsing_total, 1, "Total time spent parsing text:");
   {
-    instance_t instance(context_stack, context_stack.get_current(), NULL,
-                        checking_style == journal_t::CHECK_PERMISSIVE);
-    instance.apply_stack.push_front
-      (application_t("account", context_stack.get_current().master));
-    instance.parse();
+    instance_t(parsing_context, parsing_context.get_current(), journal,
+               NULL, checking_style == CHECK_PERMISSIVE).parse();
   }
   TRACE_STOP(parsing_total, 1);
 
   // Apply any deferred postings at this time
-  master->apply_deferred_posts();
+  journal.master->apply_deferred_posts();
 
   // These tracers were started in textual.cc
   TRACE_FINISH(xact_text, 1);
@@ -1941,10 +1929,10 @@ std::size_t journal_t::read_textual(parse_context_stack_t& context_stack)
   TRACE_FINISH(instance_parse, 1); // report per-instance timers
   TRACE_FINISH(parsing_total, 1);
 
-  if (context_stack.get_current().errors > 0)
-    throw error_count(context_stack.get_current().errors);
+  if (parsing_context.get_current().errors > 0)
+    throw error_count(parsing_context.get_current().errors);
 
-  return context_stack.get_current().count;
+  return parsing_context.get_current().count;
 }
 
 } // namespace ledger

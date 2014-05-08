@@ -91,10 +91,13 @@ class time_log_t : public boost::noncopyable
 {
   std::list<time_xact_t> time_xacts;
   parse_context_t&       context;
+  journal_t&             journal;
 
 public:
-  time_log_t(parse_context_t& _context) : context(_context) {
-    TRACE_CTOR(time_log_t, "parse_context_t&");
+  time_log_t(parse_context_t& _context,
+             journal_t&       _journal)
+    : context(_context), journal(_journal) {
+    TRACE_CTOR(time_log_t, "parse_context_t&, journal_t&");
   }
   ~time_log_t() {
     TRACE_DTOR(time_log_t);

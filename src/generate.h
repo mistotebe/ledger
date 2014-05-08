@@ -46,13 +46,12 @@
 
 namespace ledger {
 
-class session_t;
-
 class generate_posts_iterator
   : public iterator_facade_base<generate_posts_iterator, post_t *,
                                 boost::forward_traversal_tag>
 {
-  session_t&   session;
+  shared_ptr<journal_t> journal;
+
   unsigned int seed;
   std::size_t  quantity;
   date_t       next_date;
@@ -97,9 +96,9 @@ class generate_posts_iterator
   xact_posts_iterator posts;
 
 public:
-  generate_posts_iterator(session_t&   _session,
-                          unsigned int _seed         = 0,
-                          std::size_t  _quantity     = 100);
+  generate_posts_iterator(shared_ptr<journal_t> _journal,
+                          unsigned int          _seed     = 0,
+                          std::size_t           _quantity = 100);
 
   virtual ~generate_posts_iterator() throw() {
     TRACE_DTOR(generate_posts_iterator);

@@ -32,15 +32,17 @@
 #include <system.hh>
 
 #include "generate.h"
-#include "session.h"
+#include "journal.h"
+#include "reader.h"
+#include "context.h"
 
 namespace ledger {
 
 generate_posts_iterator::generate_posts_iterator
-  (session_t&   _session,
-   unsigned int _seed,
-   std::size_t  _quantity)
-  : session(_session), seed(_seed), quantity(_quantity),
+  (shared_ptr<journal_t> _journal,
+   unsigned int          _seed,
+   std::size_t           _quantity)
+  : journal(_journal), seed(_seed), quantity(_quantity),
 
     rnd_gen(seed == 0 ? static_cast<unsigned int>(std::time(0)) : seed),
 
@@ -358,16 +360,10 @@ void generate_posts_iterator::increment()
     DEBUG("generate.post", "The post we intend to parse:\n" << buf.str());
 
     try {
-      shared_ptr<std::istringstream> in(new std::istringstream(buf.str()));
-
-      parse_context_stack_t parsing_context;
-      parsing_context.push(in);
-      parsing_context.get_current().journal = session.journal.get();
-      parsing_context.get_current().scope   = &session;
-
-      if (session.journal->read(parsing_context) != 0) {
-        VERIFY(session.journal->xacts.back()->valid());
-        posts.reset(*session.journal->xacts.back());
+      journal->reader->read_journal_from_string(buf.str());
+      if (journal->xacts.size() != 0) {
+        VERIFY(journal->xacts.back()->valid());
+        posts.reset(*journal->xacts.back());
         post = *posts++;
       }
     }

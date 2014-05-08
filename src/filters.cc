@@ -610,7 +610,7 @@ changed_value_posts::changed_value_posts
   else
     gains_equity_account_name = _("Equity:Unrealized Gains");
   gains_equity_account =
-    report.session.journal->master->find_account(gains_equity_account_name);
+    report.journal->master->find_account(gains_equity_account_name);
   gains_equity_account->add_flags(ACCOUNT_GENERATED);
 
   string losses_equity_account_name;
@@ -619,7 +619,7 @@ changed_value_posts::changed_value_posts
   else
     losses_equity_account_name = _("Equity:Unrealized Losses");
   losses_equity_account =
-    report.session.journal->master->find_account(losses_equity_account_name);
+    report.journal->master->find_account(losses_equity_account_name);
   losses_equity_account->add_flags(ACCOUNT_GENERATED);
 
   create_accounts();

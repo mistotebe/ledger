@@ -40,21 +40,23 @@
 
 #include "option.h"
 #include "report.h"
+#include "reader.h"
 
 namespace ledger {
 
-class session_t;
 class report_t;
 
-extern std::string       _init_file;
+extern std::string _init_file;
 
 class global_scope_t : public noncopyable, public scope_t
 {
-  shared_ptr<session_t> session_ptr;
-  ptr_list<report_t>    report_stack;
-  empty_scope_t         empty_scope;
+  ptr_list<report_t> report_stack;
+  empty_scope_t      empty_scope;
 
 public:
+  static void initialize_ledger();
+  static void shutdown_ledger();
+
   global_scope_t(char ** envp);
   ~global_scope_t();
 
@@ -67,8 +69,8 @@ public:
     return _("global scope");
   }
 
-  void           parse_init(path init_file);
-  void           read_init();
+  void           parse_init(shared_ptr<journal_t> journal, path init_file);
+  void           read_init(shared_ptr<journal_t> journal);
   void           read_environment_settings(char * envp[]);
   strings_list   read_command_arguments(scope_t& scope, strings_list args);
   void           normalize_session_options();
@@ -77,9 +79,6 @@ public:
 
   char * prompt_string();
 
-  session_t& session() {
-    return *session_ptr.get();
-  }
   report_t& report() {
     return report_stack.front();
   }
@@ -139,6 +138,14 @@ See LICENSE file included with the distribution for details and disclaimer.");
 
   virtual expr_t::ptr_op_t lookup(const symbol_t::kind_t kind,
                                   const string& name);
+
+  value_t fn_min(call_scope_t& scope);
+  value_t fn_max(call_scope_t& scope);
+  value_t fn_int(call_scope_t& scope);
+  value_t fn_str(call_scope_t& scope);
+  value_t fn_lot_price(call_scope_t& scope);
+  value_t fn_lot_date(call_scope_t& scope);
+  value_t fn_lot_tag(call_scope_t& scope);
 
   OPTION(global_scope_t, args_only);
   OPTION(global_scope_t, debug_);

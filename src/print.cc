@@ -35,7 +35,6 @@
 #include "xact.h"
 #include "post.h"
 #include "account.h"
-#include "session.h"
 #include "report.h"
 
 namespace ledger {

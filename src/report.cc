@@ -32,7 +32,7 @@
 #include <system.hh>
 
 #include "report.h"
-#include "session.h"
+#include "reader.h"
 #include "pool.h"
 #include "format.h"
 #include "query.h"
@@ -80,14 +80,14 @@ void report_t::normalize_options(const string& verb)
   item_t::use_aux_date = (HANDLED(aux_date) && ! HANDLED(primary_date));
 
   commodity_pool_t::current_pool->keep_base  = HANDLED(base);
-  commodity_pool_t::current_pool->get_quotes = session.HANDLED(download);
+  commodity_pool_t::current_pool->get_quotes = HANDLED(download);
 
-  if (session.HANDLED(price_exp_))
+  if (journal->reader->HANDLED(price_exp_))
     commodity_pool_t::current_pool->quote_leeway =
-      lexical_cast<long>(session.HANDLER(price_exp_).value) * 3600L;
+      lexical_cast<long>(journal->reader->HANDLER(price_exp_).value) * 3600L;
 
-  if (session.HANDLED(price_db_))
-    commodity_pool_t::current_pool->price_db = session.HANDLER(price_db_).str();
+  if (journal->reader->HANDLED(price_db_))
+    commodity_pool_t::current_pool->price_db = journal->reader->HANDLER(price_db_).str();
   else
     commodity_pool_t::current_pool->price_db = none;
 
@@ -329,7 +329,7 @@ namespace {
     }
 
     void operator()(const value_t&) {
-      report.session.journal->clear_xdata();
+      report.journal->clear_xdata();
     }
   };
 }
@@ -345,7 +345,7 @@ void report_t::posts_report(post_handler_ptr handler)
   }
   handler = chain_pre_post_handlers(handler, *this);
 
-  journal_posts_iterator walker(*session.journal.get());
+  journal_posts_iterator walker(journal);
   pass_down_posts<journal_posts_iterator>(handler, walker);
 
   if (! HANDLED(group_by_))
@@ -357,7 +357,7 @@ void report_t::generate_report(post_handler_ptr handler)
   handler = chain_handlers(handler, *this);
 
   generate_posts_iterator walker
-    (session, HANDLED(seed_) ?
+    (journal, HANDLED(seed_) ?
      lexical_cast<unsigned int>(HANDLER(seed_).str()) : 0,
      HANDLED(head_) ?
      lexical_cast<unsigned int>(HANDLER(head_).str()) : 50);
@@ -414,14 +414,14 @@ namespace {
         DEBUG("report.predicate",
               "Display predicate = " << report.HANDLER(display_).str());
         if (! report.HANDLED(sort_)) {
-          basic_accounts_iterator iter(*report.session.journal->master);
+          basic_accounts_iterator iter(*report.journal->master);
           pass_down_accounts<basic_accounts_iterator>
             (handler, iter, predicate_t(report.HANDLER(display_).str(),
                                         report.what_to_keep()), report);
         } else {
           expr_t sort_expr(report.HANDLER(sort_).str());
           sort_expr.set_context(&report);
-          sorted_accounts_iterator iter(*report.session.journal->master,
+          sorted_accounts_iterator iter(*report.journal->master,
                                         sort_expr, report.HANDLED(flat));
           pass_down_accounts<sorted_accounts_iterator>
             (handler, iter, predicate_t(report.HANDLER(display_).str(),
@@ -429,18 +429,18 @@ namespace {
         }
       } else {
         if (! report.HANDLED(sort_)) {
-          basic_accounts_iterator iter(*report.session.journal->master);
+          basic_accounts_iterator iter(*report.journal->master);
           pass_down_accounts<basic_accounts_iterator>(handler, iter);
         } else {
           expr_t sort_expr(report.HANDLER(sort_).str());
           sort_expr.set_context(&report);
-          sorted_accounts_iterator iter(*report.session.journal->master,
+          sorted_accounts_iterator iter(*report.journal->master,
                                         sort_expr, report.HANDLED(flat));
           pass_down_accounts<sorted_accounts_iterator>(handler, iter);
         }
       }
 
-      report.session.journal->clear_xdata();
+      report.journal->clear_xdata();
     }
   };
 }
@@ -464,7 +464,7 @@ void report_t::accounts_report(acct_handler_ptr handler)
   // The lifetime of the chain object controls the lifetime of all temporary
   // objects created within it during the call to pass_down_posts, which will
   // be needed later by the pass_down_accounts.
-  journal_posts_iterator walker(*session.journal.get());
+  journal_posts_iterator walker(journal);
   pass_down_posts<journal_posts_iterator>(chain, walker);
 
   if (! HANDLED(group_by_))
@@ -475,7 +475,7 @@ void report_t::commodities_report(post_handler_ptr handler)
 {
   handler = chain_handlers(handler, *this);
 
-  posts_commodities_iterator * walker(new posts_commodities_iterator(*session.journal.get()));
+  posts_commodities_iterator * walker(new posts_commodities_iterator(journal));
   try {
     pass_down_posts<posts_commodities_iterator>(handler, *walker);
   }
@@ -490,7 +490,7 @@ void report_t::commodities_report(post_handler_ptr handler)
     throw;
   }
 
-  session.journal->clear_xdata();
+  journal->clear_xdata();
 }
 
 value_t report_t::display_value(const value_t& val)
@@ -988,12 +988,14 @@ namespace {
   }
 }
 
+#if 0
 value_t report_t::reload_command(call_scope_t&)
 {
   session.close_journal_files();
   session.read_journal_files();
   return true;
 }
+#endif
 
 value_t report_t::echo_command(call_scope_t& args)
 {
@@ -1058,6 +1060,9 @@ option_t<report_t> * report_t::lookup_option(const char * p)
     break;
   case 'P':
     OPT_CH(by_payee);
+    break;
+  case 'Q':
+    OPT_CH(download); // -Q
     break;
   case 'R':
     OPT_CH(real);
@@ -1135,6 +1140,7 @@ option_t<report_t> * report_t::lookup_option(const char * p)
     else OPT(display_total_);
     else OPT_ALT(dow, days_of_week);
     else OPT(date_width_);
+    else OPT(download); // -Q
     break;
   case 'e':
     OPT(empty);
@@ -1275,13 +1281,13 @@ option_t<report_t> * report_t::lookup_option(const char * p)
 void report_t::define(const symbol_t::kind_t kind, const string& name,
                       expr_t::ptr_op_t def)
 {
-  session.define(kind, name, def);
+  journal->define(kind, name, def);
 }
 
 expr_t::ptr_op_t report_t::lookup(const symbol_t::kind_t kind,
                                   const string& name)
 {
-  if (expr_t::ptr_op_t def = session.lookup(kind, name))
+  if (expr_t::ptr_op_t def = journal->lookup(kind, name))
     return def;
 
   const char * p = name.c_str();
@@ -1660,9 +1666,11 @@ expr_t::ptr_op_t report_t::lookup(const symbol_t::kind_t kind,
       if (*(p + 1) == '\0' || is_eq(p, "reg") || is_eq(p, "register")) {
         return FORMATTED_POSTS_REPORTER(register_format_);
       }
+#if 0
       else if (is_eq(p, "reload")) {
         return MAKE_FUNCTOR(report_t::reload_command);
       }
+#endif
       break;
 
     case 's':

@@ -33,7 +33,6 @@
 
 #include "global.h"             // This is where the meat of main() is, which
                                 // was moved there for the sake of clarity here
-#include "session.h"
 
 using namespace ledger;
 
@@ -83,12 +82,10 @@ int main(int argc, char * argv[], char * envp[])
 #endif
 
   global_scope_t * global_scope = NULL;
-
   try {
     // Create the session object, which maintains nearly all state relating to
     // this invocation of Ledger; and register all known journal parsers.
     global_scope = new global_scope_t(envp);
-    global_scope->session().set_flush_on_next_data_file(true);
 
     // Construct an STL-style argument list from the process command arguments
     strings_list args;
@@ -101,7 +98,7 @@ int main(int argc, char * argv[], char * envp[])
 
     if (global_scope->HANDLED(script_)) {
       // Ledger is being invoked as a script command interpreter
-      global_scope->session().read_journal_files();
+      global_scope->report().journal->reader->read_journal_files();
 
       status = 0;
 
@@ -124,7 +121,7 @@ int main(int argc, char * argv[], char * envp[])
       // Commence the REPL by displaying the current Ledger version
       global_scope->show_version_info(std::cout);
 
-      global_scope->session().read_journal_files();
+      global_scope->report().journal->reader->read_journal_files();
 
       bool exit_loop = false;
 

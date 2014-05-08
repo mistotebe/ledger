@@ -35,7 +35,6 @@
 #include "predicate.h"
 #include "filters.h"
 #include "report.h"
-#include "session.h"
 
 namespace ledger {
 
@@ -69,7 +68,7 @@ post_handler_ptr chain_pre_post_handlers(post_handler_ptr base_handler,
   if (report.budget_flags != BUDGET_NO_BUDGET) {
     budget_posts * budget_handler =
       new budget_posts(handler, report.terminus.date(), report.budget_flags);
-    budget_handler->add_period_xacts(report.session.journal->period_xacts);
+    budget_handler->add_period_xacts(report.journal->period_xacts);
     handler.reset(budget_handler);
 
     // Apply this before the budget handler, so that only matching posts are
@@ -91,7 +90,7 @@ post_handler_ptr chain_pre_post_handlers(post_handler_ptr base_handler,
                            (report.HANDLED(forecast_years_) ?
                             lexical_cast<std::size_t>
                             (report.HANDLER(forecast_years_).value) : 5UL));
-    forecast_handler->add_period_xacts(report.session.journal->period_xacts);
+    forecast_handler->add_period_xacts(report.journal->period_xacts);
     handler.reset(forecast_handler);
 
     // See above, under budget_posts.
@@ -227,13 +226,13 @@ post_handler_ptr chain_post_handlers(post_handler_ptr base_handler,
 
   if (report.HANDLED(date_))
     handler.reset(new transfer_details(handler, transfer_details::SET_DATE,
-                                       report.session.journal->master,
+                                       report.journal->master,
                                        report.HANDLER(date_).str(),
                                        report));
 
   if (report.HANDLED(account_)) {
     handler.reset(new transfer_details(handler, transfer_details::SET_ACCOUNT,
-                                       report.session.journal->master,
+                                       report.journal->master,
                                        report.HANDLER(account_).str(),
                                        report));
   }
@@ -241,13 +240,13 @@ post_handler_ptr chain_post_handlers(post_handler_ptr base_handler,
     string pivot = report.HANDLER(pivot_).str();
     pivot = string("\"") + pivot + ":\" + tag(\"" + pivot + "\")";
     handler.reset(new transfer_details(handler, transfer_details::SET_ACCOUNT,
-                                       report.session.journal->master, pivot,
+                                       report.journal->master, pivot,
                                        report));
   }
 
   if (report.HANDLED(payee_))
     handler.reset(new transfer_details(handler, transfer_details::SET_PAYEE,
-                                       report.session.journal->master,
+                                       report.journal->master,
                                        report.HANDLER(payee_).str(),
                                        report));
 
@@ -260,7 +259,7 @@ post_handler_ptr chain_post_handlers(post_handler_ptr base_handler,
 
   if (report.HANDLED(inject_))
     handler.reset(new inject_posts(handler, report.HANDLED(inject_).str(),
-                                   report.session.journal->master));
+                                   report.journal->master));
 
   return handler;
 }

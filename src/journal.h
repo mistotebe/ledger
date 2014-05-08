@@ -46,6 +46,7 @@
 #include "times.h"
 #include "mask.h"
 #include "expr.h"
+#include "scope.h"
 
 namespace ledger {
 
@@ -55,24 +56,16 @@ class auto_xact_t;
 class period_xact_t;
 class post_t;
 class account_t;
-class parse_context_t;
-class parse_context_stack_t;
 
-typedef std::list<xact_t *>            xacts_list;
-typedef std::list<auto_xact_t *>       auto_xacts_list;
-typedef std::list<period_xact_t *>     period_xacts_list;
-typedef std::pair<mask_t, string>      payee_mapping_t;
-typedef std::list<payee_mapping_t>     payee_mappings_t;
-typedef std::pair<mask_t, account_t *> account_mapping_t;
-typedef std::list<account_mapping_t>   account_mappings_t;
-typedef std::map<string, account_t *>  accounts_map;
-typedef std::map<string, xact_t *>     checksum_map_t;
+typedef std::list<xact_t *>        xacts_list;
+typedef std::list<auto_xact_t *>   auto_xacts_list;
+typedef std::list<period_xact_t *> period_xacts_list;
 
-typedef std::multimap<string, expr_t::check_expr_pair> tag_check_exprs_map;
-
-class journal_t : public noncopyable
+class journal_t : public symbol_scope_t
 {
 public:
+  class reader_t;
+
   struct fileinfo_t
   {
     optional<path> filename;
@@ -116,47 +109,18 @@ public:
   };
 
   account_t *           master;
-  account_t *           bucket;
   xacts_list            xacts;
   auto_xacts_list       auto_xacts;
   period_xacts_list     period_xacts;
   std::list<fileinfo_t> sources;
-  std::set<string>      known_payees;
-  std::set<string>      known_tags;
-  bool                  fixed_accounts;
-  bool                  fixed_payees;
-  bool                  fixed_commodities;
-  bool                  fixed_metadata;
-  bool                  was_loaded;
-  bool                  force_checking;
-  bool                  check_payees;
-  bool                  day_break;
-  bool                  recursive_aliases;
-  bool                  no_aliases;
-  payee_mappings_t      payee_mappings;
-  account_mappings_t    account_mappings;
-  accounts_map          account_aliases;
-  account_mappings_t    payees_for_unknown_accounts;
-  checksum_map_t        checksum_map;
-  tag_check_exprs_map   tag_check_exprs;
   optional<expr_t>      value_expr;
-  parse_context_t *     current_context;
 
-  enum checking_style_t {
-    CHECK_PERMISSIVE,
-    CHECK_NORMAL,
-    CHECK_WARNING,
-    CHECK_ERROR
-  } checking_style;
+  // Reader used to read the initial data in.
+  // jww (2014-05-08): This should be removed!
+  unique_ptr<reader_t> reader;
 
   journal_t();
-#if 0
-  journal_t(const path& pathname);
-  journal_t(const string& str);
-#endif
   ~journal_t();
-
-  void initialize();
 
   std::list<fileinfo_t>::iterator sources_begin() {
     return sources.begin();
@@ -165,45 +129,7 @@ public:
     return sources.end();
   }
 
-  void        add_account(account_t * acct);
-  bool        remove_account(account_t * acct);
-  account_t * find_account(const string& name, bool auto_create = true);
-  account_t * find_account_re(const string& regexp);
-
-  account_t * expand_aliases(string name);
-
-  account_t * register_account(const string& name, post_t * post,
-                               account_t * master = NULL);
-  string      register_payee(const string& name, xact_t * xact);
-  void        register_commodity(commodity_t& comm,
-                                 variant<int, xact_t *, post_t *> context);
-  void        register_metadata(const string& key, const value_t& value,
-                                variant<int, xact_t *, post_t *> context);
-
-  bool add_xact(xact_t * xact);
-  void extend_xact(xact_base_t * xact);
   bool remove_xact(xact_t * xact);
-
-  xacts_list::iterator xacts_begin() {
-    return xacts.begin();
-  }
-  xacts_list::iterator xacts_end() {
-    return xacts.end();
-  }
-  auto_xacts_list::iterator auto_xacts_begin() {
-    return auto_xacts.begin();
-  }
-  auto_xacts_list::iterator auto_xacts_end() {
-    return auto_xacts.end();
-  }
-  period_xacts_list::iterator period_xacts_begin() {
-    return period_xacts.begin();
-  }
-  period_xacts_list::iterator period_xacts_end() {
-    return period_xacts.end();
-  }
-
-  std::size_t read(parse_context_stack_t& context);
 
   bool has_xdata();
   void clear_xdata();
@@ -211,8 +137,6 @@ public:
   bool valid() const;
 
 private:
-  std::size_t read_textual(parse_context_stack_t& context);
-
 #if HAVE_BOOST_SERIALIZATION
 private:
   /** Serialization. */
@@ -227,11 +151,18 @@ private:
     ar & auto_xacts;
     ar & period_xacts;
     ar & sources;
-    ar & payee_mappings;
-    ar & account_mappings;
-    ar & checksum_map;
   }
 #endif // HAVE_BOOST_SERIALIZATION
+
+public:
+  virtual string description() {
+    return _("journal");
+  }
+
+  virtual expr_t::ptr_op_t lookup(const symbol_t::kind_t kind,
+                                  const string& name);
+
+  value_t fn_account(call_scope_t& scope);
 };
 
 } // namespace ledger

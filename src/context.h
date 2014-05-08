@@ -47,9 +47,7 @@
 
 namespace ledger {
 
-class journal_t;
 class account_t;
-class scope_t;
 
 class parse_context_t
 {
@@ -60,9 +58,6 @@ public:
 
   path             pathname;
   path             current_directory;
-  journal_t *      journal;
-  account_t *      master;
-  scope_t *        scope;
   char             linebuf[MAX_LINE + 1];
   istream_pos_type line_beg_pos;
   istream_pos_type curr_pos;
@@ -70,23 +65,19 @@ public:
   std::size_t      errors;
   std::size_t      count;
   std::size_t      sequence;
+  account_t *      master;
 
   explicit parse_context_t(const path& cwd)
-    : current_directory(cwd), master(NULL), scope(NULL),
-      linenum(0), errors(0), count(0), sequence(1) {}
+    : current_directory(cwd), linenum(0), errors(0), count(0), sequence(1) {}
 
-  explicit parse_context_t(shared_ptr<std::istream> _stream,
-                           const path& cwd)
-    : stream(_stream), current_directory(cwd), master(NULL),
-      scope(NULL), linenum(0), errors(0), count(0), sequence(1) {}
+  explicit parse_context_t(shared_ptr<std::istream> _stream, const path& cwd)
+    : stream(_stream), current_directory(cwd),
+      linenum(0), errors(0), count(0), sequence(1) {}
 
   parse_context_t(const parse_context_t& context)
    : stream(context.stream),
      pathname(context.pathname),
      current_directory(context.current_directory),
-     journal(context.journal),
-     master(context.master),
-     scope(context.scope),
      line_beg_pos(context.line_beg_pos),
      curr_pos(context.curr_pos),
      linenum(context.linenum),

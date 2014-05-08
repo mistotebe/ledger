@@ -37,6 +37,7 @@
 #include "iterators.h"
 #include "report.h"
 #include "xact.h"
+#include "reader.h"
 #include "print.h"
 #include "lookup.h"
 
@@ -45,7 +46,7 @@ namespace ledger {
 value_t convert_command(call_scope_t& args)
 {
   report_t&  report(args.context<report_t>());
-  journal_t& journal(*report.session.journal.get());
+  shared_ptr<journal_t> journal(report.journal);
 
   string bucket_name;
   if (report.HANDLED(account_))
@@ -53,23 +54,19 @@ value_t convert_command(call_scope_t& args)
   else
     bucket_name = _("Equity:Unknown");
 
-  account_t * bucket  = journal.master->find_account(bucket_name);
-  account_t * unknown = journal.master->find_account(_("Expenses:Unknown"));
+  account_t * bucket  = journal->master->find_account(bucket_name);
+  account_t * unknown = journal->master->find_account(_("Expenses:Unknown"));
 
   // Create a flat list
-  xacts_list current_xacts(journal.xacts_begin(), journal.xacts_end());
+  xacts_list current_xacts(journal->xacts.begin(), journal->xacts.end());
 
   // Read in the series of transactions from the CSV file
 
   print_xacts formatter(report);
   path        csv_file_path(args.get<string>(0));
 
-  report.session.parsing_context.push(csv_file_path);
-  parse_context_t& context(report.session.parsing_context.get_current());
-  context.journal = &journal;
-  context.master  = bucket;
-
-  csv_reader reader(context);
+  parse_context_t context(csv_file_path);
+  csv_reader reader(context, journal);
 
   try {
     while (xact_t * xact = reader.read_xact(report.HANDLED(rich_data))) {
@@ -82,10 +79,10 @@ value_t convert_command(call_scope_t& args)
                     xact->get_tag(_("UUID"))->to_string() :
                     sha1sum(reader.get_last_line()));
 
-      checksum_map_t::const_iterator entry = journal.checksum_map.find(ref);
-      if (entry != journal.checksum_map.end()) {
-        INFO(file_context(reader.get_pathname(),
-                          reader.get_linenum())
+      checksum_map_t::const_iterator entry =
+        journal->reader->checksum_map.find(ref);
+      if (entry != journal->reader->checksum_map.end()) {
+        INFO(file_context(reader.get_pathname(), reader.get_linenum())
              << "Ignoring known UUID " << ref);
         checked_delete(xact);     // ignore it
         continue;
@@ -105,7 +102,7 @@ value_t convert_command(call_scope_t& args)
           xact->posts.front()->account = unknown;
       }
 
-      if (! journal.add_xact(xact)) {
+      if (! journal->reader->add_xact(xact)) {
         checked_delete(xact);
         throw_(std::runtime_error,
                _("Failed to finalize derived transaction (check commodities)"));

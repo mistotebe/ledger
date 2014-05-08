@@ -49,12 +49,11 @@
 #include "option.h"
 #include "commodity.h"
 #include "annotate.h"
-#include "session.h"
+#include "journal.h"
 #include "format.h"
 
 namespace ledger {
 
-class session_t;
 class xact_t;
 
 // These are the elements of any report:
@@ -106,8 +105,8 @@ class report_t : public scope_t
   report_t();
 
 public:
-  session_t&      session;
-  output_stream_t output_stream;
+  shared_ptr<journal_t> journal;
+  output_stream_t       output_stream;
 
 #define BUDGET_NO_BUDGET   0x00
 #define BUDGET_BUDGETED    0x01
@@ -117,13 +116,13 @@ public:
   datetime_t    terminus;
   uint_least8_t budget_flags;
 
-  explicit report_t(session_t& _session)
-    : session(_session), terminus(CURRENT_TIME()),
+  explicit report_t()
+    : journal(_journal), terminus(CURRENT_TIME()),
       budget_flags(BUDGET_NO_BUDGET) {
-    TRACE_CTOR(report_t, "session_t&");
+    TRACE_CTOR(report_t, "");
   }
   report_t(const report_t& report)
-    : scope_t(report), session(report.session),
+    : scope_t(report), journal(report.journal),
       output_stream(report.output_stream),
       terminus(report.terminus),
       budget_flags(report.budget_flags) {
@@ -224,7 +223,9 @@ public:
     return none;
   }
 
+#if 0
   value_t reload_command(call_scope_t&);
+#endif
   value_t echo_command(call_scope_t& scope);
   value_t pricemap_command(call_scope_t& scope);
 
@@ -274,6 +275,7 @@ public:
     HANDLER(display_amount_).report(out);
     HANDLER(display_total_).report(out);
     HANDLER(dow).report(out);
+    HANDLER(download).report(out);
     HANDLER(empty).report(out);
     HANDLER(end_).report(out);
     HANDLER(equity).report(out);
@@ -640,6 +642,7 @@ public:
    });
 
   OPTION(report_t, dow);
+  OPTION(report_t, download); // -Q
   OPTION(report_t, aux_date);
   OPTION(report_t, empty); // -E
 

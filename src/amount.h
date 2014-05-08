@@ -97,10 +97,10 @@ class amount_t
 {
 public:
   /** Ready the amount subsystem for use.
-      @note Normally called by session_t::initialize(). */
+      @note Normally called by global_scope_t::initialize_ledger(). */
   static void initialize();
   /** Shutdown the amount subsystem and free all resources.
-      @note Normally called by session_t::shutdown(). */
+      @note Normally called by global_scope_t::shutdown_ledger(). */
   static void shutdown();
 
   static bool is_initialized;

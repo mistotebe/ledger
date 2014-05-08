@@ -36,7 +36,7 @@
 #include "post.h"
 #include "account.h"
 #include "journal.h"
-#include "session.h"
+#include "reader.h"
 #include "report.h"
 #include "lookup.h"
 #include "print.h"
@@ -380,14 +380,14 @@ xact_t * draft_t::insert(journal_t& journal)
 
           account_t * acct = NULL;
           if (! acct) {
-            acct = journal.find_account_re(post.account_mask->str());
+            acct = journal.master->find_account_re(post.account_mask->str());
 #if DEBUG_ON
             if (acct)
               DEBUG("draft.xact", "Found account as a regular expression");
 #endif
           }
           if (! acct) {
-            acct = journal.find_account(post.account_mask->str());
+            acct = journal.master->find_account(post.account_mask->str());
 #if DEBUG_ON
             if (acct)
               DEBUG("draft.xact", "Found (or created) account by name");
@@ -414,11 +414,13 @@ xact_t * draft_t::insert(journal_t& journal)
                 "Set new posting's account to: " << acct->fullname());
         } else {
           if (post.from) {
-            new_post->account = journal.find_account(_("Liabilities:Unknown"));
+            new_post->account =
+              journal.master->find_account(_("Liabilities:Unknown"));
             DEBUG("draft.xact",
                   "Set new posting's account to: Liabilities:Unknown");
           } else {
-            new_post->account = journal.find_account(_("Expenses:Unknown"));
+            new_post->account =
+              journal.master->find_account(_("Expenses:Unknown"));
             DEBUG("draft.xact",
                   "Set new posting's account to: Expenses:Unknown");
           }
@@ -490,7 +492,7 @@ xact_t * draft_t::insert(journal_t& journal)
     }
   }
 
-  if (! journal.add_xact(added.get()))
+  if (! journal.reader->add_xact(added.get()))
     throw_(std::runtime_error,
            _("Failed to finalize derived transaction (check commodities)"));
 
@@ -518,7 +520,7 @@ value_t xact_command(call_scope_t& args)
   report_t& report(find_scope<report_t>(args));
   draft_t   draft(args.value());
 
-  unique_ptr<xact_t> new_xact(draft.insert(*report.session.journal.get()));
+  unique_ptr<xact_t> new_xact(draft.insert(*report.journal.get()));
   if (new_xact.get()) {
     // Only consider actual postings for the "xact" command
     report.HANDLER(limit_).on("#xact", "actual");

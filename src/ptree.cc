@@ -35,7 +35,7 @@
 #include "xact.h"
 #include "post.h"
 #include "account.h"
-#include "session.h"
+#include "journal.h"
 #include "report.h"
 
 namespace ledger {
@@ -64,7 +64,7 @@ void format_ptree::flush()
     put_commodity(ct.add("commodity", ""), *pair.second, true);
 
   property_tree::ptree& at(pt.put("ledger.accounts", ""));
-  put_account(at.add("account", ""), *report.session.journal->master, account_visited_p);
+  put_account(at.add("account", ""), *report.journal->master, account_visited_p);
 
   property_tree::ptree& tt(pt.put("ledger.transactions", ""));
   foreach (const xact_t * xact, transactions) {

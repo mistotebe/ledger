@@ -35,6 +35,7 @@
 #include "post.h"
 #include "account.h"
 #include "journal.h"
+#include "reader.h"
 #include "context.h"
 #include "format.h"
 #include "pool.h"
@@ -209,8 +210,9 @@ bool xact_base_t::finalize()
   // If there is only one post, balance against the default account if one has
   // been set.
 
-  if (journal && journal->bucket && posts.size() == 1 && ! balance.is_null()) {
-    null_post = new post_t(journal->bucket, ITEM_GENERATED);
+  if (journal && journal->reader->bucket &&
+      posts.size() == 1 && ! balance.is_null()) {
+    null_post = new post_t(journal->reader->bucket, ITEM_GENERATED);
     null_post->_state = (*posts.begin())->_state;
     add_post(null_post);
   }
@@ -310,9 +312,9 @@ bool xact_base_t::finalize()
 
             account_t * account;
             if (gain_loss.sign() > 0)
-              account = journal->find_account(_("Equity:Capital Gains"));
+              account = journal->master->find_account(_("Equity:Capital Gains"));
             else
-              account = journal->find_account(_("Equity:Capital Losses"));
+              account = journal->master->find_account(_("Equity:Capital Losses"));
 
             post_t * p = new post_t(account, gain_loss, ITEM_GENERATED);
             p->set_state(post->state());
@@ -785,9 +787,8 @@ void auto_xact_t::extend_xact(xact_base_t& xact, parse_context_t& context)
         }
 
         new_post->add_flags(ITEM_GENERATED);
-        new_post->account =
-          journal->register_account(account->fullname(), new_post,
-                                    journal->master);
+        new_post->account = journal->reader->register_account(
+          account->fullname(), new_post, journal->master);
 
         if (deferred_notes) {
           foreach (deferred_tag_data_t& data, *deferred_notes) {

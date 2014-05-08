@@ -53,7 +53,8 @@ class account_t;
 
 class csv_reader
 {
-  parse_context_t context;
+  parse_context_t       context;
+  shared_ptr<journal_t> journal;
 
   enum headers_t {
     FIELD_DATE = 0,
@@ -81,8 +82,8 @@ class csv_reader
   std::vector<string> names;
 
 public:
-  csv_reader(parse_context_t& _context)
-    : context(_context),
+  csv_reader(parse_context_t& _context, shared_ptr<journal_t> _journal)
+    : context(_context), journal(_journal),
       date_mask("date"),
       date_aux_mask("posted( ?date)?"),
       code_mask("code"),

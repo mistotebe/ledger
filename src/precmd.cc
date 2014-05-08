@@ -35,10 +35,11 @@
 #include "xact.h"
 #include "post.h"
 #include "account.h"
+#include "reader.h"
 #include "query.h"
-#include "session.h"
 #include "report.h"
 #include "format.h"
+#include "context.h"
 
 namespace ledger {
 
@@ -67,18 +68,11 @@ namespace {
       out << _("--- Context is first posting of the following transaction ---")
           << std::endl << str << std::endl;
       {
-        shared_ptr<std::istringstream> in(new std::istringstream(str));
-
-        parse_context_stack_t parsing_context;
-        parsing_context.push(in);
-        parsing_context.get_current().journal = report.session.journal.get();
-        parsing_context.get_current().scope   = &report.session;
-
-        report.session.journal->read(parsing_context);
-        report.session.journal->clear_xdata();
+        report.journal->reader->read_journal_from_string(str);
+        report.journal->clear_xdata();
       }
     }
-    xact_t * first = report.session.journal->xacts.front();
+    xact_t * first = report.journal->xacts.front();
     return first->posts.front();
   }
 }

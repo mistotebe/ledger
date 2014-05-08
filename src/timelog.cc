@@ -36,6 +36,7 @@
 #include "post.h"
 #include "account.h"
 #include "journal.h"
+#include "reader.h"
 #include "context.h"
 
 namespace ledger {
@@ -43,7 +44,8 @@ namespace ledger {
 namespace {
   void create_timelog_xact(const time_xact_t& in_event,
                            const time_xact_t& out_event,
-                           parse_context_t&   context)
+                           parse_context_t&   context,
+                           journal_t&         journal)
   {
     unique_ptr<xact_t> curr(new xact_t);
     curr->_date = in_event.checkin.date();
@@ -52,7 +54,7 @@ namespace {
     curr->pos   = in_event.position;
 
     if (! in_event.note.empty())
-      curr->append_note(in_event.note.c_str(), *context.scope);
+      curr->append_note(in_event.note.c_str(), journal);
 
     char buf[32];
     std::sprintf(buf, "%lds", long((out_event.checkin - in_event.checkin)
@@ -69,7 +71,7 @@ namespace {
     curr->add_post(post);
     in_event.account->add_post(post);
 
-    if (! context.journal->add_xact(curr.get()))
+    if (! journal.reader->add_xact(curr.get()))
       throw parse_error(_("Failed to record 'out' timelog transaction"));
     else
       curr.release();
@@ -77,7 +79,8 @@ namespace {
 
   std::size_t clock_out_from_timelog(std::list<time_xact_t>& time_xacts,
                                      time_xact_t             out_event,
-                                     parse_context_t&        context)
+                                     parse_context_t&        context,
+                                     journal_t&              journal)
   {
     time_xact_t event;
 
@@ -127,8 +130,8 @@ namespace {
     if (! out_event.note.empty() && event.note.empty())
       event.note = out_event.note;
 
-    if (! context.journal->day_break) {
-      create_timelog_xact(event, out_event, context);
+    if (! journal.reader->day_break) {
+      create_timelog_xact(event, out_event, context, journal);
       return 1;
     } else {
       time_xact_t begin(event);
@@ -141,14 +144,14 @@ namespace {
         DEBUG("timelog", "days_end: " << days_end);
 
         if (out_event.checkin <= days_end) {
-          create_timelog_xact(begin, out_event, context);
+          create_timelog_xact(begin, out_event, context, journal);
           ++xact_count;
           break;
         } else {
           time_xact_t end(out_event);
           end.checkin = days_end;
           DEBUG("timelog", "end.checkin: " << end.checkin);
-          create_timelog_xact(begin, end, context);
+          create_timelog_xact(begin, end, context, journal);
           ++xact_count;
 
           begin.checkin = end.checkin;
@@ -169,8 +172,9 @@ void time_log_t::close()
 
     foreach (account_t * account, accounts) {
       DEBUG("timelog", "Clocking out from account " << account->fullname());
-      context.count += clock_out_from_timelog
-        (time_xacts, time_xact_t(none, CURRENT_TIME(), account), context);
+      context.count += clock_out_from_timelog(
+        time_xacts, time_xact_t(none, CURRENT_TIME(), account),
+        context, journal);
     }
     assert(time_xacts.empty());
   }
@@ -193,7 +197,7 @@ std::size_t time_log_t::clock_out(time_xact_t event)
   if (time_xacts.empty())
     throw std::logic_error(_("Timelog check-out event without a check-in"));
 
-  return clock_out_from_timelog(time_xacts, event, context);
+  return clock_out_from_timelog(time_xacts, event, context, journal);
 }
 
 } // namespace ledger

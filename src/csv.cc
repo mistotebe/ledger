@@ -36,6 +36,7 @@
 #include "post.h"
 #include "account.h"
 #include "journal.h"
+#include "reader.h"
 #include "pool.h"
 
 namespace ledger {
@@ -186,7 +187,7 @@ xact_t * csv_reader::read_xact(bool rich_data)
 
     case FIELD_PAYEE: {
       bool found = false;
-      foreach (payee_mapping_t& value, context.journal->payee_mappings) {
+      foreach (payee_mapping_t& value, journal->reader->payee_mappings) {
         DEBUG("csv.mappings", "Looking for payee mapping: " << value.first);
         if (value.first.match(field)) {
           xact->payee = value.second;
@@ -245,7 +246,8 @@ xact_t * csv_reader::read_xact(bool rich_data)
 
   // Translate the account name, if we have enough information to do so
 
-  foreach (account_mapping_t& value, context.journal->payees_for_unknown_accounts) {
+  foreach (account_mapping_t& value,
+           journal->reader->payees_for_unknown_accounts) {
     if (value.first.match(xact->payee)) {
       post->account = value.second;
       break;

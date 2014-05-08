@@ -35,7 +35,6 @@
 #include "xact.h"
 #include "post.h"
 #include "account.h"
-#include "session.h"
 #include "report.h"
 
 namespace ledger {
@@ -247,7 +246,7 @@ void format_accounts::flush()
     disp_pred.parse(report.HANDLER(display_).str());
   }
 
-  mark_accounts(*report.session.journal->master, report.HANDLED(flat));
+  mark_accounts(*report.journal->master, report.HANDLED(flat));
 
   std::size_t displayed = 0;
 
@@ -256,7 +255,7 @@ void format_accounts::flush()
 
   if (displayed > 1 &&
       ! report.HANDLED(no_total) && ! report.HANDLED(percent)) {
-    bind_scope_t bound_scope(report, *report.session.journal->master);
+    bind_scope_t bound_scope(report, *report.journal->master);
     out << separator_format(bound_scope);
 
     if (prepend_format) {

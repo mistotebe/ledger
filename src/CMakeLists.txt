@@ -15,7 +15,6 @@ set(LEDGER_SOURCES
   report.cc
   views.cc
   select.cc
-  session.cc
   option.cc
   lookup.cc
   compare.cc
@@ -24,6 +23,7 @@ set(LEDGER_SOURCES
   textual.cc
   temps.cc
   journal.cc
+  reader.cc
   archive.cc
   account.cc
   xact.cc
@@ -63,7 +63,6 @@ if(HAVE_BOOST_PYTHON)
     py_item.cc
     py_journal.cc
     py_post.cc
-    py_session.cc
     py_times.cc
     py_utils.cc
     py_value.cc
@@ -98,6 +97,7 @@ set(LEDGER_INCLUDES
   item.h
   iterators.h
   journal.h
+  reader.h
   lookup.h
   mask.h
   op.h
@@ -120,7 +120,6 @@ set(LEDGER_INCLUDES
   report.h
   scope.h
   select.h
-  session.h
   stats.h
   stream.h
   temps.h

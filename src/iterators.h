@@ -136,6 +136,7 @@ class xacts_iterator
                                 boost::forward_traversal_tag>
 {
 public:
+  shared_ptr<journal_t> journal;
   xacts_list::iterator xacts_i;
   xacts_list::iterator xacts_end;
 
@@ -144,9 +145,9 @@ public:
   xacts_iterator() : xacts_uninitialized(true) {
     TRACE_CTOR(xacts_iterator, "");
   }
-  xacts_iterator(journal_t& journal) : xacts_uninitialized(false) {
+  xacts_iterator(shared_ptr<journal_t> journal) : xacts_uninitialized(false) {
     reset(journal);
-    TRACE_CTOR(xacts_iterator, "journal_t&");
+    TRACE_CTOR(xacts_iterator, "shared_ptr<journal_t>");
   }
   xacts_iterator(xacts_list::iterator beg,
                  xacts_list::iterator end) : xacts_uninitialized(false) {
@@ -164,7 +165,7 @@ public:
     TRACE_DTOR(xacts_iterator);
   }
 
-  void reset(journal_t& journal);
+  void reset(shared_ptr<journal_t> journal);
 
   void reset(xacts_list::iterator beg, xacts_list::iterator end) {
     xacts_i   = beg;
@@ -179,16 +180,17 @@ class journal_posts_iterator
   : public iterator_facade_base<journal_posts_iterator, post_t *,
                                 boost::forward_traversal_tag>
 {
-  xacts_iterator      xacts;
-  xact_posts_iterator posts;
+  shared_ptr<journal_t> journal;
+  xacts_iterator        xacts;
+  xact_posts_iterator   posts;
 
 public:
   journal_posts_iterator() {
     TRACE_CTOR(journal_posts_iterator, "");
   }
-  journal_posts_iterator(journal_t& journal) {
+  journal_posts_iterator(shared_ptr<journal_t> journal) {
     reset(journal);
-    TRACE_CTOR(journal_posts_iterator, "journal_t&");
+    TRACE_CTOR(journal_posts_iterator, "shared_ptr<journal_t>");
   }
   journal_posts_iterator(const journal_posts_iterator& i)
     : iterator_facade_base<journal_posts_iterator, post_t *,
@@ -200,7 +202,7 @@ public:
     TRACE_DTOR(journal_posts_iterator);
   }
 
-  void reset(journal_t& journal);
+  void reset(shared_ptr<journal_t> journal);
 
   void increment();
 };
@@ -220,7 +222,7 @@ public:
   posts_commodities_iterator() {
     TRACE_CTOR(posts_commodities_iterator, "");
   }
-  posts_commodities_iterator(journal_t& journal) {
+  posts_commodities_iterator(shared_ptr<journal_t> journal) {
     reset(journal);
     TRACE_CTOR(posts_commodities_iterator, "journal_t&");
   }
@@ -235,7 +237,7 @@ public:
     TRACE_DTOR(posts_commodities_iterator);
   }
 
-  void reset(journal_t& journal);
+  void reset(shared_ptr<journal_t> journal);
 
   void increment();
 };

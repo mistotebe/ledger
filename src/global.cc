@@ -34,17 +34,34 @@
 #include "global.h"
 #if HAVE_BOOST_PYTHON
 #include "pyinterp.h"
-#else
-#include "session.h"
 #endif
 #include "item.h"
 #include "journal.h"
+#include "context.h"
 #include "pool.h"
 
 namespace ledger {
 
 static bool args_only = false;
-std::string       _init_file;
+std::string _init_file;
+
+void global_scope_t::initialize_ledger()
+{
+  times_initialize();
+  amount_t::initialize();
+
+  amount_t::parse_conversion("1.0m", "60s");
+  amount_t::parse_conversion("1.00h", "60m");
+
+  value_t::initialize();
+}
+
+void global_scope_t::shutdown_ledger()
+{
+  value_t::shutdown();
+  amount_t::shutdown();
+  times_shutdown();
+}
 
 global_scope_t::global_scope_t(char ** envp)
 {
@@ -55,11 +72,9 @@ global_scope_t::global_scope_t(char ** envp)
     python_session.reset(new ledger::python_interpreter_t);
     session_ptr = python_session;
   }
-#else
-  session_ptr.reset(new session_t);
 #endif
 
-  set_session_context(session_ptr.get());
+  initialize_ledger();
 
   // Create the report object, which maintains state relating to each
   // command invocation.  Because we're running from main(), the
@@ -67,7 +82,9 @@ global_scope_t::global_scope_t(char ** envp)
   // a GUI were calling into Ledger it would have one session object per
   // open document, with a separate report_t object for each report it
   // generated.
-  report_stack.push_front(new report_t(*session_ptr));
+  shared_ptr<journal_t> journal(new journal_t);
+  journal->reader.reset(new journal_t::reader_t(*journal.get()));
+  report_stack.push_front(new report_t(journal));
   scope_t::default_scope = &report();
   scope_t::empty_scope   = &empty_scope;
 
@@ -81,12 +98,10 @@ global_scope_t::global_scope_t(char ** envp)
   // that such options are beginning, since options like -f cause a complete
   // override of files found anywhere else.
   if (! args_only) {
-    session().set_flush_on_next_data_file(true);
     read_environment_settings(envp);
-    session().set_flush_on_next_data_file(true);
-    read_init();
+    read_init(journal);
   } else {
-    session().HANDLER(price_db_).off();
+    journal->reader->HANDLER(price_db_).off();
   }
 
   TRACE_CTOR(global_scope_t, "");
@@ -100,56 +115,48 @@ global_scope_t::~global_scope_t()
   // clean up everything by closing the session and deleting the session
   // object, and then shutting down the memory tracing subsystem.
   // Otherwise, let it all leak because we're about to exit anyway.
-  IF_VERIFY() set_session_context(NULL);
+  IF_VERIFY() shutdown_ledger();
 
 #if HAVE_BOOST_PYTHON
   python_session.reset();
 #endif
 }
 
-void global_scope_t::parse_init(path init_file)
+void global_scope_t::parse_init(shared_ptr<journal_t> journal, path init_file)
 {
   TRACE_START(init, 1, "Read initialization file");
-  
-  parse_context_stack_t parsing_context;
-  parsing_context.push(init_file);
-  parsing_context.get_current().journal = session().journal.get();
-  parsing_context.get_current().scope   = &report();
 
-  if (session().journal->read(parsing_context) > 0 ||
-      session().journal->auto_xacts.size() > 0 ||
-      session().journal->period_xacts.size() > 0) {
+  if (journal->reader->read_journal(init_file) > 0 ||
+      journal->auto_xacts.size() > 0 ||
+      journal->period_xacts.size() > 0) {
     throw_(parse_error, _f("Transactions found in initialization file '%1%'")
 	   % init_file);
   }
-  
+
   TRACE_FINISH(init, 1);
 }
 
-void global_scope_t::read_init()
+void global_scope_t::read_init(shared_ptr<journal_t> journal)
 {
-  // if specified on the command line init_file_ is filled in 
-  // global_scope_t::handle_debug_options.  If it was specified on the command line
-  // fail is the file doesn't exist. If no init file was specified
-  // on the command-line then try the default values, but don't fail if there
-  // isn't one.
+  // if specified on the command line init_file_ is filled in
+  // global_scope_t::handle_debug_options.  If it was specified on the
+  // command line fail is the file doesn't exist. If no init file was
+  // specified on the command-line then try the default values, but
+  // don't fail if there isn't one.
   path init_file;
   if (HANDLED(init_file_)) {
-    init_file=HANDLER(init_file_).str();
-    if (exists(init_file)) {
-      parse_init(init_file);
-    } else {
+    init_file = HANDLER(init_file_).str();
+    if (exists(init_file))
+      parse_init(journal, init_file);
+    else
       throw_(parse_error, _f("Could not find specified init file %1%") % init_file);
-    }
   } else {
-    if (const char * home_var = std::getenv("HOME")){
+    if (const char * home_var = std::getenv("HOME"))
       init_file = (path(home_var) / ".ledgerrc");
-    } else {
+    else
       init_file = ("./.ledgerrc");
-    }
-  }
-  if(exists(init_file)){
-    parse_init(init_file);
+    if (exists(init_file))
+      parse_init(journal, init_file);
   }
 }
 
@@ -183,8 +190,6 @@ void global_scope_t::report_error(const std::exception& err)
 
 void global_scope_t::execute_command(strings_list args, bool at_repl)
 {
-  session().set_flush_on_next_data_file(true);
-
   // Process the command verb, arguments and options
   if (at_repl) {
     args = read_command_arguments(report(), args);
@@ -211,7 +216,10 @@ void global_scope_t::execute_command(strings_list args, bool at_repl)
 
   expr_t::func_t command;
   bool           is_precommand = false;
-  bind_scope_t   bound_scope(*this, report());
+  // jww (2014-05-08): Really the report's reader should not be accessed
+  // like this.
+  bind_scope_t   inner_scope(*report().journal->reader.get(), report());
+  bind_scope_t   bound_scope(*this, inner_scope);
 
   if (bool(command = look_for_precommand(bound_scope, verb)))
     is_precommand = true;
@@ -222,7 +230,7 @@ void global_scope_t::execute_command(strings_list args, bool at_repl)
 
   if (! is_precommand) {
     if (! at_repl)
-      session().read_journal_files();
+      report().journal->reader->read_journal_files();
 
     report().normalize_options(verb);
 
@@ -298,8 +306,8 @@ void global_scope_t::report_options(report_t& report, std::ostream& out)
   HANDLER(verify).report(out);
   HANDLER(verify_memory).report(out);
 
-  out << std::endl << "[Session scope options]" << std::endl;
-  report.session.report_options(out);
+  out << std::endl << "[Journal scope options]" << std::endl;
+  report.journal->reader->report_options(out);
 
   out << std::endl << "[Report scope options]" << std::endl;
   report.report_options(out);
@@ -350,8 +358,41 @@ option_t<global_scope_t> * global_scope_t::lookup_option(const char * p)
 expr_t::ptr_op_t global_scope_t::lookup(const symbol_t::kind_t kind,
                                         const string& name)
 {
+  const char * p = name.c_str();
+
   switch (kind) {
   case symbol_t::FUNCTION:
+    switch (*p) {
+    case 'i':
+      if (is_eq(p, "int"))
+        return MAKE_FUNCTOR(global_scope_t::fn_int);
+      break;
+
+    case 'l':
+      if (is_eq(p, "lot_price"))
+        return MAKE_FUNCTOR(global_scope_t::fn_lot_price);
+      else if (is_eq(p, "lot_date"))
+        return MAKE_FUNCTOR(global_scope_t::fn_lot_date);
+      else if (is_eq(p, "lot_tag"))
+        return MAKE_FUNCTOR(global_scope_t::fn_lot_tag);
+      break;
+
+    case 'm':
+      if (is_eq(p, "min"))
+        return MAKE_FUNCTOR(global_scope_t::fn_min);
+      else if (is_eq(p, "max"))
+        return MAKE_FUNCTOR(global_scope_t::fn_max);
+      break;
+
+    case 's':
+      if (is_eq(p, "str"))
+        return MAKE_FUNCTOR(global_scope_t::fn_str);
+      break;
+
+    default:
+      break;
+    }
+    // Check if they are trying to access an option's setting or value.
     if (option_t<global_scope_t> * handler = lookup_option(name.c_str()))
       return MAKE_OPT_FUNCTOR(global_scope_t, handler);
     break;
@@ -379,6 +420,49 @@ expr_t::ptr_op_t global_scope_t::lookup(const symbol_t::kind_t kind,
   // If you're wondering how symbols from report() will be found, it's
   // because of the bind_scope_t object in execute_command() below.
   return NULL;
+}
+
+value_t global_scope_t::fn_min(call_scope_t& args)
+{
+  return args[1] < args[0] ? args[1] : args[0];
+}
+value_t global_scope_t::fn_max(call_scope_t& args)
+{
+  return args[1] > args[0] ? args[1] : args[0];
+}
+
+value_t global_scope_t::fn_int(call_scope_t& args)
+{
+  return args[0].to_long();
+}
+value_t global_scope_t::fn_str(call_scope_t& args)
+{
+  return string_value(args[0].to_string());
+}
+
+value_t global_scope_t::fn_lot_price(call_scope_t& args)
+{
+  amount_t amt(args.get<amount_t>(1, false));
+  if (amt.has_annotation() && amt.annotation().price)
+    return *amt.annotation().price;
+  else
+    return NULL_VALUE;
+}
+value_t global_scope_t::fn_lot_date(call_scope_t& args)
+{
+  amount_t amt(args.get<amount_t>(1, false));
+  if (amt.has_annotation() && amt.annotation().date)
+    return *amt.annotation().date;
+  else
+    return NULL_VALUE;
+}
+value_t global_scope_t::fn_lot_tag(call_scope_t& args)
+{
+  amount_t amt(args.get<amount_t>(1, false));
+  if (amt.has_annotation() && amt.annotation().tag)
+    return string_value(*amt.annotation().tag);
+  else
+    return NULL_VALUE;
 }
 
 void global_scope_t::read_environment_settings(char * envp[])
@@ -427,9 +511,11 @@ void global_scope_t::normalize_session_options()
 {
 #if LOGGING_ON
   INFO("Initialization file is " << HANDLER(init_file_).str());
-  INFO("Price database is " << session().HANDLER(price_db_).str());
+  INFO("Price database is "
+       << report().journal->reader->HANDLER(price_db_).str());
 
-  foreach (const path& pathname, session().HANDLER(file_).data_files)
+  foreach (const path& pathname,
+           report().journal->reader->HANDLER(file_).data_files)
     INFO("Journal file is " << pathname.string());
 #endif // LOGGING_ON
 }

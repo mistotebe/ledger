@@ -37,10 +37,10 @@
 
 namespace ledger {
 
-void xacts_iterator::reset(journal_t& journal)
+void xacts_iterator::reset(shared_ptr<journal_t> journal)
 {
-  xacts_i   = journal.xacts.begin();
-  xacts_end = journal.xacts.end();
+  xacts_i   = journal->xacts.begin();
+  xacts_end = journal->xacts.end();
 
   xacts_uninitialized = false;
 
@@ -55,7 +55,7 @@ void xacts_iterator::increment()
     m_node = NULL;
 }
 
-void journal_posts_iterator::reset(journal_t& journal)
+void journal_posts_iterator::reset(shared_ptr<journal_t> journal)
 {
   xacts.reset(journal);
   increment();
@@ -134,7 +134,7 @@ namespace {
   };
 }
 
-void posts_commodities_iterator::reset(journal_t& journal)
+void posts_commodities_iterator::reset(shared_ptr<journal_t> journal)
 {
   journal_posts.reset(journal);
 
@@ -149,7 +149,8 @@ void posts_commodities_iterator::reset(journal_t& journal)
 
   foreach (commodity_t * comm, commodities)
     comm->map_prices
-      (create_price_xact(journal, journal.master->find_account(comm->symbol()),
+      (create_price_xact(*journal.get(),
+                         journal->master->find_account(comm->symbol()),
                          temps, xact_temps));
 
   xacts.reset(xact_temps.begin(), xact_temps.end());
