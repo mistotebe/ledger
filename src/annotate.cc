@@ -194,15 +194,25 @@ void annotation_t::parse(std::istream& in)
 #endif
 }
 
-void annotation_t::print(std::ostream& out, bool keep_base,
+void annotation_t::print(std::ostream& out,
+                         const optional<amount_t>& quantity,
+                         bool keep_base,
                          bool no_computed_annotations) const
 {
   if (price &&
-      (! no_computed_annotations || ! has_flags(ANNOTATION_PRICE_CALCULATED)))
-    out << " {"
-        << (has_flags(ANNOTATION_PRICE_FIXATED) ? "=" : "")
-        << (keep_base ? *price : price->unreduced())
-        << '}';
+      (! no_computed_annotations || ! has_flags(ANNOTATION_PRICE_CALCULATED))) {
+    if (has_flags(ANNOTATION_PRICE_NOT_PER_UNIT)) {
+      out << " {{"
+          << (has_flags(ANNOTATION_PRICE_FIXATED) ? "=" : "")
+          << ((keep_base ? *price : price->unreduced()) * quantity->abs())
+          << "}}";
+    } else {
+      out << " {"
+          << (has_flags(ANNOTATION_PRICE_FIXATED) ? "=" : "")
+          << (keep_base ? *price : price->unreduced())
+          << '}';
+    }
+  }
 
   if (date &&
       (! no_computed_annotations || ! has_flags(ANNOTATION_DATE_CALCULATED)))
@@ -367,9 +377,10 @@ annotated_commodity_t::strip_annotations(const keep_details_t& what_to_keep)
 }
 
 void annotated_commodity_t::write_annotations
-  (std::ostream& out, bool no_computed_annotations) const
+  (std::ostream& out, const optional<amount_t>& quantity,
+   bool no_computed_annotations) const
 {
-  details.print(out, pool().keep_base, no_computed_annotations);
+  details.print(out, quantity, pool().keep_base, no_computed_annotations);
 }
 
 } // namespace ledger

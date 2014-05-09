@@ -100,7 +100,9 @@ struct annotation_t : public supports_flags<>,
   }
 
   void parse(std::istream& in);
-  void print(std::ostream& out, bool keep_base = false,
+  void print(std::ostream& out,
+             const optional<amount_t>& quantity = none,
+             bool keep_base = false,
              bool no_computed_annotations = false) const;
 
   bool valid() const {
@@ -236,7 +238,8 @@ public:
 
   virtual commodity_t& strip_annotations(const keep_details_t& what_to_keep);
 
-  virtual void print(std::ostream& out, bool elide_quotes = false,
+  virtual void print(std::ostream& out,
+                     bool elide_quotes = false,
                      bool print_annotations = false) const {
     if (print_annotations) {
       std::ostringstream buf;
@@ -249,6 +252,7 @@ public:
   }
 
   virtual void write_annotations(std::ostream& out,
+                                 const optional<amount_t>& quantity = none,
                                  bool no_computed_annotations = false) const;
 
 #if HAVE_BOOST_SERIALIZATION

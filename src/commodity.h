@@ -210,7 +210,8 @@ public:
   virtual commodity_t& strip_annotations(const keep_details_t&) {
     return *this;
   }
-  virtual void write_annotations(std::ostream&, bool) const {}
+  virtual void write_annotations(std::ostream&, const optional<amount_t>&,
+                                 bool) const {}
 
   commodity_pool_t& pool() const {
     return *parent_;
@@ -308,7 +309,8 @@ public:
     return temp;
   }
 
-  virtual void print(std::ostream& out, bool elide_quotes = false,
+  virtual void print(std::ostream& out,
+                     bool elide_quotes = false,
                      bool print_annotations = false) const;
   bool valid() const;
 

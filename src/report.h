@@ -324,6 +324,7 @@ public:
     HANDLER(pricedb_format_).report(out);
     HANDLER(primary_date).report(out);
     HANDLER(quantity).report(out);
+    HANDLER(quantity_cost).report(out);
     HANDLER(quarterly).report(out);
     HANDLER(raw).report(out);
     HANDLER(real).report(out);
@@ -747,6 +748,15 @@ public:
 
   OPTION_(report_t, market, DO() { // -V
       OTHER(revalued).on(whence);
+
+      OTHER(display_amount_)
+        .on(whence, "market(display_amount, value_date, exchange)");
+      OTHER(display_total_)
+        .on(whence, "market(display_total, value_date, exchange)");
+    });
+
+  OPTION_(report_t, quantity_cost, DO() {
+      OTHER(revalued).off();
 
       OTHER(display_amount_)
         .on(whence, "market(display_amount, value_date, exchange)");

@@ -243,13 +243,13 @@ namespace {
           amtbuf << string(2 - (slip + amt_slip), ' ');
         amtbuf << amt;
 
-        if (post->cost &&
+        if (post->given_cost &&
             ! post->has_flags(POST_CALCULATED | POST_COST_CALCULATED)) {
           if (post->has_flags(POST_COST_IN_FULL))
-            amtbuf << " @@ " << post->cost->abs();
+            amtbuf << " @@ " << post->given_cost->abs();
           else
             amtbuf << " @ "
-                   << (*post->cost / post->amount).abs();
+                   << (*post->given_cost / post->amount).abs();
         }
 
         if (post->assigned_amount)
