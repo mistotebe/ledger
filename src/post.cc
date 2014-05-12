@@ -237,6 +237,13 @@ namespace {
       return post.amount;
   }
 
+  value_t get_given_cost(post_t& post) {
+    if (post.given_cost)
+      return *post.given_cost;
+    else
+      return get_cost(post);
+  }
+
   value_t get_price(post_t& post) {
     if (post.amount.is_null())
       return 0L;
@@ -461,6 +468,11 @@ expr_t::ptr_op_t post_t::lookup(const symbol_t::kind_t kind,
       return WRAP_FUNCTOR(get_wrapper<&get_account_depth>);
     else if (name == "datetime")
       return WRAP_FUNCTOR(get_wrapper<&get_datetime>);
+    break;
+
+  case 'g':
+    if (name == "given_cost")
+      return WRAP_FUNCTOR(get_wrapper<&get_given_cost>);
     break;
 
   case 'h':

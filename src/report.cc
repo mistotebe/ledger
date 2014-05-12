@@ -1155,6 +1155,7 @@ option_t<report_t> * report_t::lookup_option(const char * p)
     break;
   case 'g':
     OPT(gain);
+    else OPT(given_cost);
     else OPT(group_by_);
     else OPT(group_title_format_);
     else OPT(generated);
@@ -1218,7 +1219,6 @@ option_t<report_t> * report_t::lookup_option(const char * p)
     break;
   case 'q':
     OPT(quantity);
-    else OPT(quantity_cost);
     else OPT(quarterly);
     break;
   case 'r':
