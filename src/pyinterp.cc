@@ -153,7 +153,29 @@ void python_interpreter_t::initialize()
 
     main_module = import_module("__main__");
 
+#if PY_VERSION_HEX+0 >= 0x03000000
+    static PyModuleDef_Base initial_m_base = {
+        PyObject_HEAD_INIT(NULL)
+        0, /* m_init */
+        0, /* m_index */
+        0 /* m_copy */ };
+    static PyMethodDef initial_methods[] = { { 0, 0, 0, 0 } };
+
+    static struct PyModuleDef moduledef = {
+        initial_m_base,
+        "ledger",
+        0, /* m_doc */
+        -1, /* m_size */
+        initial_methods,
+        0,  /* m_reload */
+        0, /* m_traverse */
+        0, /* m_clear */
+        0,  /* m_free */
+    };
+    python::detail::init_module(moduledef, &initialize_for_python);
+#else /* PY_VERSION_HEX */
     python::detail::init_module("ledger", &initialize_for_python);
+#endif /* PY_VERSION_HEX */
 
     is_initialized = true;
   }
@@ -322,20 +344,59 @@ object python_interpreter_t::eval(const string& str, py_eval_mode_t mode)
   return object();
 }
 
+#if PY_VERSION_HEX+0 >= 0x03000000
+wchar_t *
+copy_for_python(const char *s)
+{
+  setlocale(LC_ALL, "");
+  mbstate_t state;
+  std::memset(&state,0,sizeof(mbstate_t));
+
+  size_t len = mbsrtowcs(NULL, &s, 0, &state);
+  if (len < 0)
+      return NULL;
+
+  wchar_t *result = new wchar_t[len+1];
+  if (result == NULL) {
+      return NULL;
+  }
+
+  if (mbsrtowcs(result, &s, len + 1, &state) == (size_t) -1) {
+      delete result;
+      return NULL;
+  }
+
+  return result;
+}
+#else /* PY_VERSION_HEX */
+char *
+copy_for_python(const char *s)
+{
+    char *result = new char[std::strlen(s) + 1];
+    if (!result)
+        return NULL;
+
+    std::strcpy(result, s);
+    return result;
+}
+#endif /* PY_VERSION_HEX */
+
 value_t python_interpreter_t::python_command(call_scope_t& args)
 {
   if (! is_initialized)
     initialize();
 
+#if PY_VERSION_HEX+0 >= 0x03000000
+  wchar_t ** argv = new wchar_t *[args.size() + 1];
+#else /* PY_VERSION_HEX */
   char ** argv = new char *[args.size() + 1];
+#endif /* PY_VERSION_HEX */
 
-  argv[0] = new char[std::strlen(argv0) + 1];
-  std::strcpy(argv[0], argv0);
+  argv[0] = copy_for_python(argv0);
 
   for (std::size_t i = 0; i < args.size(); i++) {
     string arg = args.get<string>(i);
-    argv[i + 1] = new char[arg.length() + 1];
-    std::strcpy(argv[i + 1], arg.c_str());
+    argv[i + 1] = copy_for_python(arg.c_str());
   }
 
   int status = 1;
