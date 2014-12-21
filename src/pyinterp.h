@@ -36,6 +36,20 @@
 
 #if HAVE_BOOST_PYTHON
 
+#if PY_VERSION_HEX+0 >= 0x03000000
+
+#define PyString_Check PyBytes_Check
+#define PyString_Size PyBytes_Size
+#define PyString_AsString PyBytes_AsString
+#define PyString_FromString PyBytes_FromString
+
+#define PyInt_Type PyLong_Type
+
+#define PyFileObject PyObject
+#define PyFile_Check(x) (1)
+
+#endif /* PY_VERSION_HEX */
+
 namespace ledger {
 
 class python_module_t : public scope_t, public noncopyable
