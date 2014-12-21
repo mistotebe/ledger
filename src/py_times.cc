@@ -41,10 +41,14 @@ namespace ledger {
 
 using namespace boost::python;
 
+#if PY_VERSION_HEX+0 >= 0x03000000
+#define MY_PyDateTime_IMPORT PyDateTime_IMPORT
+#else /* PY_VERSION_HEX */
 #define MY_PyDateTime_IMPORT                            \
   PyDateTimeAPI = (PyDateTime_CAPI*)                    \
   PyCObject_Import(const_cast<char *>("datetime"),      \
                    const_cast<char *>("datetime_CAPI"))
+#endif /* PY_VERSION_HEX */
 
 struct date_to_python
 {
