@@ -57,7 +57,13 @@ endif()
 
 ########################################################################
 
-set(Python_ADDITIONAL_VERSIONS 2.7 2.6)
+if (NOT DEFINED Python_ADDITIONAL_VERSIONS)
+  # Run cmake with -DPython_ADDITIONAL_VERSIONS="3.4;2.7"
+  # and replace "3.4;2.7" with a list of semicolon separated
+  # Python versions (in order of preference) to search for
+  # when looking for Python.
+  set(Python_ADDITIONAL_VERSIONS 3.4 2.7 2.6)
+endif()
 find_package(PythonInterp)      # Used for running tests
 
 if (USE_PYTHON)
@@ -65,11 +71,20 @@ if (USE_PYTHON)
     message(ERROR "Building the python module requires BUILD_LIBRARY=ON.")
   endif()
 
-  find_package(PythonLibs ${USE_PYTHON})
+  find_package(PythonLibs)
   if (PYTHONLIBS_FOUND)
-    string(REGEX REPLACE "([0-9]*)\\.([0-9]*).*" "python-py\\1\\2"
-        BOOST_PYTHON
-        ${PYTHONLIBS_VERSION_STRING})
+    if (PYTHON_VERSION_MAJOR EQUAL "3")
+      if (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+        set(BOOST_PYTHON python${PYTHON_VERSION_MAJOR})
+      elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        set(BOOST_PYTHON python-py${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR})
+      else()
+        message(WARNING "Using empty Boost.Python suffix for system ${CMAKE_SYSTEM_NAME}. If the Boost.Python libraries aren't found or compatible with Python ${PYTHON_VERSION_STRING}, please contact the developers.")
+        set(BOOST_PYTHON python)
+      endif()
+    else()
+      set(BOOST_PYTHON python)
+    endif()
     set(HAVE_BOOST_PYTHON 1)
     include_directories(SYSTEM ${PYTHON_INCLUDE_DIRS})
   else()
