@@ -65,9 +65,11 @@ if (USE_PYTHON)
     message(ERROR "Building the python module requires BUILD_LIBRARY=ON.")
   endif()
 
-  find_package(PythonLibs)
+  find_package(PythonLibs ${USE_PYTHON})
   if (PYTHONLIBS_FOUND)
-    set(BOOST_PYTHON python)
+    string(REGEX REPLACE "([0-9]*)\\.([0-9]*).*" "python-py\\1\\2"
+        BOOST_PYTHON
+        ${PYTHONLIBS_VERSION_STRING})
     set(HAVE_BOOST_PYTHON 1)
     include_directories(SYSTEM ${PYTHON_INCLUDE_DIRS})
   else()
