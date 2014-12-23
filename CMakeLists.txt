@@ -73,16 +73,26 @@ if (USE_PYTHON)
 
   find_package(PythonLibs)
   if (PYTHONLIBS_FOUND)
-    if (PYTHON_VERSION_MAJOR EQUAL "3")
-      if (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-        set(BOOST_PYTHON python${PYTHON_VERSION_MAJOR})
-      elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        set(BOOST_PYTHON python-py${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR})
-      else()
-        message(WARNING "Using empty Boost.Python suffix for system ${CMAKE_SYSTEM_NAME}. If the Boost.Python libraries aren't found or compatible with Python ${PYTHON_VERSION_STRING}, please contact the developers.")
-        set(BOOST_PYTHON python)
-      endif()
+    string(REGEX MATCH "^[0-9]*"
+        PYTHONLIBS_MAJOR_VERSION
+        ${PYTHONLIBS_VERSION_STRING})
+    string(REGEX REPLACE "^[0-9]*\\.([0-9]*).*" "\\1"
+        PYTHONLIBS_MINOR_VERSION
+        ${PYTHONLIBS_VERSION_STRING})
+
+    set(CANDIDATE_NAMES
+        "boost_python-py${PYTHONLIBS_MAJOR_VERSION}${PYTHONLIBS_MINOR_VERSION}"
+        "boost_python${PYTHONLIBS_MAJOR_VERSION}"
+        "boost_python"
+        )
+    find_library(_BOOST_PYTHON NAMES ${CANDIDATE_NAMES})
+
+    if (_BOOST_PYTHON)
+        string(REGEX MATCH "python[0-9]*(-py[0-9]*)?"
+          BOOST_PYTHON
+          ${_BOOST_PYTHON})
     else()
+      message(WARNING "Using empty Boost.Python suffix for system ${CMAKE_SYSTEM_NAME}. If the Boost.Python libraries aren't found or compatible with Python ${PYTHON_VERSION_STRING}, please contact the developers.")
       set(BOOST_PYTHON python)
     endif()
     set(HAVE_BOOST_PYTHON 1)
