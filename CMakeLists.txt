@@ -85,7 +85,7 @@ if (USE_PYTHON)
         "boost_python${PYTHONLIBS_MAJOR_VERSION}"
         "boost_python"
         )
-    find_library(_BOOST_PYTHON NAMES ${CANDIDATE_NAMES})
+    find_library(_BOOST_PYTHON NAMES ${CANDIDATE_NAMES} PATHS ${BOOST_ROOT}/lib)
 
     if (_BOOST_PYTHON)
         string(REGEX MATCH "python[0-9]*(-py[0-9]*)?"
