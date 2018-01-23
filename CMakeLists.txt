@@ -57,21 +57,14 @@ endif()
 
 ########################################################################
 
-if (NOT DEFINED Python_ADDITIONAL_VERSIONS)
-  # Run cmake with -DPython_ADDITIONAL_VERSIONS="3.4;2.7"
-  # and replace "3.4;2.7" with a list of semicolon separated
-  # Python versions (in order of preference) to search for
-  # when looking for Python.
-  set(Python_ADDITIONAL_VERSIONS 3.4 2.7 2.6)
-endif()
-find_package(PythonInterp)      # Used for running tests
+find_package(PythonInterp ${USE_PYTHON})      # Used for running tests
 
 if (USE_PYTHON)
   if (NOT BUILD_LIBRARY)
     message(ERROR "Building the python module requires BUILD_LIBRARY=ON.")
   endif()
 
-  find_package(PythonLibs)
+  find_package(PythonLibs ${USE_PYTHON})
   if (PYTHONLIBS_FOUND)
     string(REGEX MATCH "^[0-9]*"
         PYTHONLIBS_MAJOR_VERSION
