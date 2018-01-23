@@ -75,10 +75,10 @@ if (USE_PYTHON)
   if (PYTHONLIBS_FOUND)
     string(REGEX MATCH "^[0-9]*"
         PYTHONLIBS_MAJOR_VERSION
-        ${PYTHONLIBS_VERSION_STRING})
+        "${PYTHONLIBS_VERSION_STRING}")
     string(REGEX REPLACE "^[0-9]*\\.([0-9]*).*" "\\1"
         PYTHONLIBS_MINOR_VERSION
-        ${PYTHONLIBS_VERSION_STRING})
+        "${PYTHONLIBS_VERSION_STRING}")
 
     set(CANDIDATE_NAMES
         "boost_python-py${PYTHONLIBS_MAJOR_VERSION}${PYTHONLIBS_MINOR_VERSION}"
@@ -90,7 +90,7 @@ if (USE_PYTHON)
     if (_BOOST_PYTHON)
         string(REGEX MATCH "python[0-9]*(-py[0-9]*)?"
           BOOST_PYTHON
-          ${_BOOST_PYTHON})
+          "${_BOOST_PYTHON}")
     else()
       message(WARNING "Using empty Boost.Python suffix for system ${CMAKE_SYSTEM_NAME}. If the Boost.Python libraries aren't found or compatible with Python ${PYTHON_VERSION_STRING}, please contact the developers.")
       set(BOOST_PYTHON python)
